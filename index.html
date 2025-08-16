@@ -372,8 +372,9 @@
 
         #blocklyDiv {
             flex: 1;
-            background: white;
+            background: #f8f9fa;
             border-radius: 0 0 0 20px;
+            border: 1px solid #e9ecef;
         }
 
         /* Code Panel */
@@ -689,6 +690,7 @@
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s ease;
+            transition-delay: 0.5s;
         }
 
         .code-resizer:hover::before {
@@ -707,12 +709,12 @@
             opacity: 0;
             pointer-events: none;
             transition: opacity 0.3s ease;
+            transition-delay: 0.5s;
         }
 
         .sidebar-resizer:hover::before,
         .code-resizer:hover::before {
             opacity: 1;
-            transition-delay: 0.5s;
         }
     </style>
 </head>
@@ -908,8 +910,17 @@
                 <div class="code-title">📝 Arduino Code</div>
                 <button class="copy-btn" onclick="copyCode()">📋 Copy</button>
             </div>
-            <textarea id="codeArea" readonly
-                placeholder="// Code will be generated automatically when you drag and drop blocks..."></textarea>
+            <textarea id="codeArea" readonly placeholder="// Welcome to ESP32 Blockly IDE!
+// Drag blocks from the left sidebar to start programming
+// Your Arduino code will appear here automatically
+
+void setup() {
+  // Setup code runs once when ESP32 starts
+}
+
+void loop() {
+  // Main code runs repeatedly
+}"></textarea>
         </div>
     </div>
 
@@ -973,6 +984,14 @@
                         scaleSpeed: 1.2
                     },
                     trashcan: true,
+                    move: {
+                        scrollbars: {
+                            horizontal: true,
+                            vertical: true
+                        },
+                        drag: true,
+                        wheel: true
+                    },
                     theme: {
                         'base': Blockly.Themes.Classic,
                         'categoryStyles': {
@@ -1001,6 +1020,9 @@
                 // Auto-generate code when blocks change
                 workspace.addChangeListener(onWorkspaceChange);
 
+                // Generate initial empty code
+                generateArduinoCode();
+
                 console.log('Blockly workspace initialized successfully');
             } catch (error) {
                 console.error('Blockly initialization error:', error);
@@ -1014,16 +1036,85 @@
             updateBlockCount();
         }
 
+        // Auto format Arduino code
+        function formatArduinoCode(code) {
+            if (!code || !code.trim()) return code;
+
+            let formatted = code;
+            let indentLevel = 0;
+            const indentSize = 2; // 2 spaces per indent
+            const lines = formatted.split('\n');
+            const formattedLines = [];
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i].trim();
+
+                if (!line) {
+                    formattedLines.push('');
+                    continue;
+                }
+
+                // Decrease indent for closing braces
+                if (line.includes('}')) {
+                    indentLevel = Math.max(0, indentLevel - 1);
+                }
+
+                // Add proper indentation
+                const indent = ' '.repeat(indentLevel * indentSize);
+                formattedLines.push(indent + line);
+
+                // Increase indent for opening braces
+                if (line.includes('{')) {
+                    indentLevel++;
+                }
+            }
+
+            // Add proper spacing around blocks
+            let result = formattedLines.join('\n');
+
+            // Add empty line before function declarations
+            result = result.replace(/\n(void\s+\w+\s*\([^)]*\)\s*{)/g, '\n\n$1');
+
+            // Add empty line before setup and loop
+            result = result.replace(/\n(void\s+setup\s*\(\s*\)\s*{)/g, '\n$1');
+            result = result.replace(/\n(void\s+loop\s*\(\s*\)\s*{)/g, '\n\n$1');
+
+            // Remove extra blank lines at the beginning
+            result = result.replace(/^\n+/, '');
+
+            // Ensure single empty line at the end
+            result = result.replace(/\n*$/, '\n');
+
+            return result;
+        }
+
         // Generate Arduino code from blocks
         function generateArduinoCode() {
             try {
                 if (!workspace) return;
 
-                const code = Blockly.Arduino.workspaceToCode(workspace);
-                document.getElementById('codeArea').value = code;
+                let code = Blockly.Arduino.workspaceToCode(workspace);
+                const codeArea = document.getElementById('codeArea');
 
                 if (code.trim()) {
-                    updateStatus('Code generated successfully', 'success');
+                    // Auto format the generated code
+                    code = formatArduinoCode(code);
+                    codeArea.value = code;
+                    updateStatus('Code generated and formatted successfully', 'success');
+                } else {
+                    // Show default template when no blocks
+                    codeArea.value = `// ESP32 Blockly IDE - Start by dragging blocks!
+// Click on categories in the left sidebar to see available blocks
+
+void setup() {
+  // Initialization code goes here
+  // This runs once when ESP32 starts
+}
+
+void loop() {
+  // Main program code goes here  
+  // This runs repeatedly
+}`;
                 }
             } catch (error) {
                 console.error('Code generation error:', error);

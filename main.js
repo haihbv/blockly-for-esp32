@@ -142,10 +142,10 @@ function startServer() {
                     console.log('PowerShell detection failed:', psError.message);
                 }
 
-                // Method 2: Try Registry query
+                // Method 2: Try Registry query for all COM ports
                 if (detectedPorts.length === 0) {
                     try {
-                        const regCommand = 'reg query HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM /v \\VCP';
+                        const regCommand = 'reg query HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM';
                         const regOutput = execSync(regCommand, {
                             encoding: 'utf8',
                             timeout: 3000,
@@ -154,7 +154,7 @@ function startServer() {
 
                         const lines = regOutput.split('\n');
                         lines.forEach(line => {
-                            const match = line.match(/\s+(COM\d+)\s+/);
+                            const match = line.match(/\s+(COM\d+)\s*$/);
                             if (match) {
                                 detectedPorts.push({
                                     path: match[1],

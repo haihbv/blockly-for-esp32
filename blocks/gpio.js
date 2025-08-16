@@ -39,6 +39,24 @@ if (typeof Blockly !== 'undefined' && Blockly.Blocks) {
     }
   };
 
+  Blockly.Blocks['esp32_analog_read'] = {
+    init: function () {
+      this.appendDummyInput()
+        .appendField("Analog Read")
+        .appendField(new Blockly.FieldTextInput("A0", function (text) {
+          // Validate that input is a valid analog pin
+          if (text.match(/^A\d+$/) || text.match(/^\d+$/)) {
+            return text;
+          }
+          return null;
+        }), "PIN");
+      this.setOutput(true, "Number");
+      this.setColour(160);
+      this.setTooltip("Read the analog value from a pin (0-4095)");
+      this.setHelpUrl("");
+    }
+  };
+
   Blockly.Blocks['esp32_button_read'] = {
     init: function () {
       this.appendDummyInput()
