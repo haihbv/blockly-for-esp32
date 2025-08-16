@@ -18,6 +18,30 @@ Blockly.Arduino.addReservedWords('setup,loop,pinMode,digitalWrite,delay');
 // Define RESERVED_WORDS_
 Blockly.Arduino.RESERVED_WORDS_ = 'setup,loop,if,else,for,switch,case,while,do,break,continue,function,return,goto,try,throw,catch,finally,true,false,null,undefined,void,int,float,double,char,byte,boolean,String,Array';
 
+// Helper functions for better code formatting
+Blockly.Arduino.INDENT = '  '; // 2 spaces for indentation (VS Code style)
+
+// Function to add proper indentation to multi-line code
+Blockly.Arduino.addIndent = function (code, level) {
+  if (!code) return '';
+  level = level || 1;
+  const indent = Blockly.Arduino.INDENT.repeat(level);
+  return code.split('\n').map(line => {
+    return line.trim() ? indent + line.trim() : '';
+  }).join('\n');
+};
+
+// Override statementToCode to provide better formatting
+Blockly.Arduino.statementToCode = function (block, name) {
+  var targetBlock = block.getInputTargetBlock(name);
+  var code = Blockly.Arduino.blockToCode(targetBlock);
+  if (!code) {
+    return '';
+  }
+  // Add proper indentation
+  return Blockly.Arduino.addIndent(code) + '\n';
+};
+
 // Define operator precedence
 Blockly.Arduino.ORDER_ATOMIC = 0;         // 0 "" ...
 Blockly.Arduino.ORDER_NEW = 1.1;          // new
@@ -55,7 +79,7 @@ Blockly.Arduino.ORDER_YIELD = 17;
 Blockly.Arduino.ORDER_COMMA = 18;
 Blockly.Arduino.ORDER_NONE = 99;
 
-// Block -> code
+// Block generators with improved formatting
 Blockly.Arduino['esp32_digital_write'] = function (block) {
   const pin = block.getFieldValue('PIN');
   const state = block.getFieldValue('STATE');
@@ -84,29 +108,78 @@ Blockly.Arduino['esp32_button_read'] = function (block) {
 };
 
 Blockly.Arduino['esp32_delay_ms'] = function (block) {
-  const t = block.getFieldValue('DELAY');
-  return 'delay(' + t + ');\n';
+  const delay = block.getFieldValue('DELAY');
+  return 'delay(' + delay + ');\n';
 };
 
-Blockly.Arduino['esp32_if'] = function (block) {
-  const condition = Blockly.Arduino.valueToCode(block, 'CONDITION', Blockly.Arduino.ORDER_NONE) || 'false';
-  const branch = Blockly.Arduino.statementToCode(block, 'DO');
-  return 'if (' + condition + ') {\n' + branch + '}\n';
-};
-
+// WHILE loop with better formatting
 Blockly.Arduino['esp32_while'] = function (block) {
   const condition = Blockly.Arduino.valueToCode(block, 'CONDITION', Blockly.Arduino.ORDER_NONE) || 'false';
-  const branch = Blockly.Arduino.statementToCode(block, 'DO');
+  let branch = Blockly.Arduino.statementToCode(block, 'DO');
+
+  // Remove extra indentation since we'll add it properly
+  branch = branch.replace(/^  /gm, '');
+
+  if (branch) {
+    branch = Blockly.Arduino.addIndent(branch.trim()) + '\n';
+  }
+
   return 'while (' + condition + ') {\n' + branch + '}\n';
 };
 
-// Standard Blockly blocks generators
+// Mapping cho API mới
+if (!Blockly.Arduino.forBlock) Blockly.Arduino.forBlock = Object.create(null);
+Blockly.Arduino.forBlock['esp32_while'] = Blockly.Arduino['esp32_while'];
+
+// IF statement with better formatting
 Blockly.Arduino['controls_if'] = function (block) {
-  const condition = Blockly.Arduino.valueToCode(block, 'IF0', Blockly.Arduino.ORDER_NONE) || 'false';
-  const branch = Blockly.Arduino.statementToCode(block, 'DO0');
-  return 'if (' + condition + ') {\n' + branch + '}\n';
+  var n = 0;
+  var code = '';
+  var conditionCode, branchCode;
+
+  // Main IF condition
+  conditionCode = Blockly.Arduino.valueToCode(block, 'IF' + n, Blockly.Arduino.ORDER_NONE) || 'false';
+  branchCode = Blockly.Arduino.statementToCode(block, 'DO' + n);
+
+  // Remove extra indentation and re-add properly
+  branchCode = branchCode.replace(/^  /gm, '');
+  if (branchCode.trim()) {
+    branchCode = Blockly.Arduino.addIndent(branchCode.trim()) + '\n';
+  }
+
+  code += 'if (' + conditionCode + ') {\n' + branchCode + '}';
+
+  // ELSE IF conditions
+  for (n = 1; n <= block.elseifCount_; n++) {
+    conditionCode = Blockly.Arduino.valueToCode(block, 'IF' + n, Blockly.Arduino.ORDER_NONE) || 'false';
+    branchCode = Blockly.Arduino.statementToCode(block, 'DO' + n);
+
+    // Remove extra indentation and re-add properly
+    branchCode = branchCode.replace(/^  /gm, '');
+    if (branchCode.trim()) {
+      branchCode = Blockly.Arduino.addIndent(branchCode.trim()) + '\n';
+    }
+
+    code += ' else if (' + conditionCode + ') {\n' + branchCode + '}';
+  }
+
+  // ELSE condition
+  if (block.elseCount_) {
+    branchCode = Blockly.Arduino.statementToCode(block, 'ELSE');
+
+    // Remove extra indentation and re-add properly
+    branchCode = branchCode.replace(/^  /gm, '');
+    if (branchCode.trim()) {
+      branchCode = Blockly.Arduino.addIndent(branchCode.trim()) + '\n';
+    }
+
+    code += ' else {\n' + branchCode + '}';
+  }
+
+  return code + '\n';
 };
 
+// Logic and control blocks with improved formatting
 Blockly.Arduino['logic_compare'] = function (block) {
   const OPERATORS = {
     'EQ': '==',
@@ -129,10 +202,12 @@ Blockly.Arduino['logic_operation'] = function (block) {
   const order = (operator == '&&') ? Blockly.Arduino.ORDER_LOGICAL_AND : Blockly.Arduino.ORDER_LOGICAL_OR;
   const argument0 = Blockly.Arduino.valueToCode(block, 'A', order);
   const argument1 = Blockly.Arduino.valueToCode(block, 'B', order);
+
   if (!argument0 && !argument1) {
     const code = (operator == '&&') ? 'false' : 'true';
     return [code, Blockly.Arduino.ORDER_ATOMIC];
   }
+
   const code = (argument0 || 'false') + ' ' + operator + ' ' + (argument1 || 'false');
   return [code, order];
 };
@@ -142,9 +217,17 @@ Blockly.Arduino['logic_boolean'] = function (block) {
   return [code, Blockly.Arduino.ORDER_ATOMIC];
 };
 
+// FOR loop with better formatting
 Blockly.Arduino['controls_repeat_ext'] = function (block) {
   const repeats = Blockly.Arduino.valueToCode(block, 'TIMES', Blockly.Arduino.ORDER_ASSIGNMENT) || '0';
-  const branch = Blockly.Arduino.statementToCode(block, 'DO');
+  let branch = Blockly.Arduino.statementToCode(block, 'DO');
+
+  // Remove extra indentation and re-add properly
+  branch = branch.replace(/^  /gm, '');
+  if (branch.trim()) {
+    branch = Blockly.Arduino.addIndent(branch.trim()) + '\n';
+  }
+
   const code = 'for (int count = 0; count < ' + repeats + '; count++) {\n' + branch + '}\n';
   return code;
 };
@@ -198,12 +281,6 @@ Blockly.Arduino['math_arithmetic'] = function (block) {
   return [code, order];
 };
 
-Blockly.Arduino['esp32_if_else'] = function (block) {
-  const condition = Blockly.Arduino.valueToCode(block, 'CONDITION', Blockly.Arduino.ORDER_NONE) || 'false';
-  const branchIf = Blockly.Arduino.statementToCode(block, 'DO');
-  const branchElse = Blockly.Arduino.statementToCode(block, 'ELSE');
-  return 'if (' + condition + ') {\n' + branchIf + '} else {\n' + branchElse + '}\n';
-};
 // Mapping cho API mới
 if (!Blockly.Arduino.forBlock) Blockly.Arduino.forBlock = Object.create(null);
 Blockly.Arduino.forBlock['esp32_digital_write'] = Blockly.Arduino['esp32_digital_write'];
@@ -211,9 +288,9 @@ Blockly.Arduino.forBlock['esp32_digital_read'] = Blockly.Arduino['esp32_digital_
 Blockly.Arduino.forBlock['esp32_analog_read'] = Blockly.Arduino['esp32_analog_read'];
 Blockly.Arduino.forBlock['esp32_button_read'] = Blockly.Arduino['esp32_button_read'];
 Blockly.Arduino.forBlock['esp32_delay_ms'] = Blockly.Arduino['esp32_delay_ms'];
-Blockly.Arduino.forBlock['esp32_if'] = Blockly.Arduino['esp32_if'];
-Blockly.Arduino.forBlock['esp32_if_else'] = Blockly.Arduino['esp32_if_else'];
 Blockly.Arduino.forBlock['esp32_while'] = Blockly.Arduino['esp32_while'];
+
+// IF blocks generators - ALL REMOVED
 
 // Standard Blockly blocks
 Blockly.Arduino.forBlock['controls_if'] = Blockly.Arduino['controls_if'];

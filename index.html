@@ -15,6 +15,7 @@
     <script src="./blocks/gpio.js"></script>
     <script src="./blocks/delay.js"></script>
     <script src="./blocks/structure.js"></script>
+    <script src="./blocks/enhanced_if.js"></script>
     <script src="./generators/arduino.js"></script>
 
     <style>
@@ -791,7 +792,7 @@
                     <div class="category-content">
                         <div class="block-item" data-block="controls_if">
                             <div class="block-icon" style="background: #3498db;"></div>
-                            <div class="block-name">If</div>
+                            <div class="block-name"> IF </div>
                         </div>
                         <div class="block-item" data-block="logic_compare">
                             <div class="block-icon" style="background: #3498db;"></div>
@@ -835,13 +836,16 @@
                         <span class="category-arrow">▼</span>
                     </div>
                     <div class="category-content">
+
+
+
+                        <div class="block-item" data-block="esp32_while">
+                            <div class="block-icon" style="background: #f39c12;"></div>
+                            <div class="block-name">🟡 WHILE</div>
+                        </div>
                         <div class="block-item" data-block="controls_repeat_ext">
                             <div class="block-icon" style="background: #9b59b6;"></div>
                             <div class="block-name">Repeat</div>
-                        </div>
-                        <div class="block-item" data-block="controls_whileUntil">
-                            <div class="block-icon" style="background: #9b59b6;"></div>
-                            <div class="block-name">While</div>
                         </div>
                     </div>
                 </div>
@@ -1023,6 +1027,10 @@ void loop() {
                 // Generate initial empty code
                 generateArduinoCode();
 
+                // Debug: Check if controls_if exists
+                console.log('Checking if controls_if exists:', typeof Blockly.Blocks.controls_if);
+                console.log('All available blocks:', Object.keys(Blockly.Blocks).filter(key => key.includes('if')));
+
                 console.log('Blockly workspace initialized successfully');
             } catch (error) {
                 console.error('Blockly initialization error:', error);
@@ -1036,13 +1044,13 @@ void loop() {
             updateBlockCount();
         }
 
-        // Auto format Arduino code
+        // Auto format Arduino code (VS Code style)
         function formatArduinoCode(code) {
             if (!code || !code.trim()) return code;
 
             let formatted = code;
             let indentLevel = 0;
-            const indentSize = 2; // 2 spaces per indent
+            const indentSize = 2; // 2 spaces per indent (VS Code default)
             const lines = formatted.split('\n');
             const formattedLines = [];
 
@@ -1069,21 +1077,43 @@ void loop() {
                 }
             }
 
-            // Add proper spacing around blocks
+            // Join lines
             let result = formattedLines.join('\n');
 
-            // Add empty line before function declarations
-            result = result.replace(/\n(void\s+\w+\s*\([^)]*\)\s*{)/g, '\n\n$1');
+            // VS Code style formatting improvements
 
-            // Add empty line before setup and loop
+            // Add proper spacing around operators
+            result = result.replace(/(\w+)=(\w+)/g, '$1 = $2');
+            result = result.replace(/(\w+)==(\w+)/g, '$1 == $2');
+            result = result.replace(/(\w+)!=(\w+)/g, '$1 != $2');
+            result = result.replace(/(\w+)<=(\w+)/g, '$1 <= $2');
+            result = result.replace(/(\w+)>=(\w+)/g, '$1 >= $2');
+            result = result.replace(/(\w+)<(\w+)/g, '$1 < $2');
+            result = result.replace(/(\w+)>(\w+)/g, '$1 > $2');
+            result = result.replace(/(\w+)&&(\w+)/g, '$1 && $2');
+            result = result.replace(/(\w+)\|\|(\w+)/g, '$1 || $2');
+
+            // Fix spacing after commas
+            result = result.replace(/,(\w)/g, ', $1');
+
+            // Add space after control keywords
+            result = result.replace(/\b(if|for|while|switch)\(/g, '$1 (');
+
+            // Add empty line before major blocks
             result = result.replace(/\n(void\s+setup\s*\(\s*\)\s*{)/g, '\n$1');
             result = result.replace(/\n(void\s+loop\s*\(\s*\)\s*{)/g, '\n\n$1');
 
-            // Remove extra blank lines at the beginning
-            result = result.replace(/^\n+/, '');
+            // Add empty line after variable declarations in setup
+            result = result.replace(/(pinMode\([^;]+;\s*\n)(\s*[^p])/g, '$1\n$2');
 
-            // Ensure single empty line at the end
-            result = result.replace(/\n*$/, '\n');
+            // Clean up multiple empty lines
+            result = result.replace(/\n\s*\n\s*\n/g, '\n\n');
+
+            // Remove extra blank lines at the beginning
+            result = result.replace(/^\s*\n+/, '');
+
+            // Ensure proper ending
+            result = result.replace(/\s*$/, '\n');
 
             return result;
         }
@@ -1102,18 +1132,31 @@ void loop() {
                     codeArea.value = code;
                     updateStatus('Code generated and formatted successfully', 'success');
                 } else {
-                    // Show default template when no blocks
-                    codeArea.value = `// ESP32 Blockly IDE - Start by dragging blocks!
-// Click on categories in the left sidebar to see available blocks
+                    // Show default template when no blocks (VS Code style)
+                    codeArea.value = `/*
+ * ESP32 Blockly IDE
+ * Generated Code Template
+ * 
+ * Start by dragging blocks from the left sidebar!
+ * Click on categories to see available blocks
+ */
 
 void setup() {
   // Initialization code goes here
   // This runs once when ESP32 starts
+  
+  // Initialize serial communication for debugging
+  Serial.begin(115200);
+  
+  // Configure your pins here
+  // Example: pinMode(LED_BUILTIN, OUTPUT);
 }
 
 void loop() {
-  // Main program code goes here  
+  // Main program code goes here
   // This runs repeatedly
+  
+  // Your code blocks will appear here
 }`;
                 }
             } catch (error) {
@@ -1302,7 +1345,18 @@ void loop() {
         // Add block to workspace
         function addBlockToWorkspace(blockType) {
             try {
-                if (!workspace) return;
+                console.log('Trying to add block:', blockType);
+                console.log('Available blocks:', Object.keys(Blockly.Blocks));
+
+                if (!workspace) {
+                    console.error('Workspace not available');
+                    return;
+                }
+
+                if (!Blockly.Blocks[blockType]) {
+                    console.error('Block type not found:', blockType);
+                    return;
+                }
 
                 const block = workspace.newBlock(blockType);
                 block.initSvg();
@@ -1314,6 +1368,8 @@ void loop() {
                     metrics.viewWidth / 2 - block.width / 2,
                     metrics.viewHeight / 2 - block.height / 2
                 );
+
+                console.log('Block added successfully:', blockType);
 
                 updateStatus(`Block added: ${blockType}`, 'success');
             } catch (error) {
