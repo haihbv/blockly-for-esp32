@@ -1,0 +1,59 @@
+{
+  "name": "esp32-blockly-ide",
+  "version": "1.0.0",
+  "description": "Visual programming IDE for ESP32 using Blockly",
+  "main": "main.js",
+  "homepage": "./",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "electron": "electron .",
+    "electron-dev": "electron . --dev",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win",
+    "build-all": "electron-builder --win --mac --linux",
+    "dist": "npm run build"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "serialport": "^12.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "devDependencies": {
+    "electron": "^37.3.0",
+    "electron-builder": "^26.0.12",
+    "electron-packager": "^17.1.2",
+    "electron-rebuild": "^3.2.9"
+  },
+  "build": {
+    "appId": "com.esp32blockly.ide",
+    "productName": "ESP32 Blockly IDE",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "blocks/**/*",
+      "generators/**/*",
+      "blockly/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false
+  },
+  "keywords": [
+    "esp32",
+    "blockly",
+    "arduino",
+    "iot",
+    "programming"
+  ],
+  "author": "ESP32 Blockly Team",
+  "license": "MIT"
+}

@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>ESP32 Blockly IDE</title>
+    <!-- Use Blockly from CDN with fallback -->
+    <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+    <script src="https://unpkg.com/blockly/blocks.min.js"></script>
+    <script src="https://unpkg.com/blockly/msg/en.js"></script>
+    <script>
+        // Fallback if CDN fails
+        if (typeof Blockly === 'undefined') {
+            console.warn('CDN failed, using simple blocks');
+            window.Blockly = {
+                inject: function (element, options) {
+                    const div = document.getElementById(element);
+                    div.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">Blockly is loading... If this persists, check your internet connection.</div>';
+                    return {
+                        addChangeListener: function () { },
+                        dispose: function () { }
+                    };
+                },
+                Arduino: {
+                    workspaceToCode: function () {
+                        return '// Blockly not loaded\nvoid setup() {\n  // Add your setup code here\n}\n\nvoid loop() {\n  // Add your main code here\n}';
+                    }
+                }
+            };
+        }
+    </script>
+    <script src="./blocks/gpio.js"></script>
+    <script src="./blocks/delay.js"></script>
+    <script src="./blocks/structure.js"></script>
+    <script src="./generators/arduino.js"></script>
+    <style>
+        body {
+            background-color: #ddd;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #blocklyDiv {
+            height: calc(100vh - 80px);
+            width: 70%;
+            float: left;
+        }
+
+        #codeDiv {
+            height: calc(100vh - 80px);
+            width: 30%;
+            float: right;
+            background: #f8f8f8;
+            border-left: 2px solid #ccc;
+            overflow-y: auto;
+        }
+
+        #toolbar {
+            height: 80px;
+            background: #2c3e50;
+            color: white;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        input,
+        button,
+        select {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .btn-success {
+            background: #27ae60;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        #portInput {
+            width: 80px;
+        }
+
+        #codeArea {
+            width: 100%;
+            height: calc(100% - 100px);
+            border: none;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background: #2c3e50;
+            color: #ecf0f1;
+            resize: none;
+            outline: none;
+        }
+
+        .code-header {
+            background: #34495e;
+            color: white;
+            padding: 10px 15px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .copy-btn {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .copy-btn:hover {
+            background: #7f8c8d;
+        }
+
+        /* Port Selection Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 400px;
+            max-width: 80%;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        .port-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .port-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .port-item:hover {
+            background: #f0f0f0;
+        }
+
+        .port-item:last-child {
+            border-bottom: none;
+        }
+
+        .port-path {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .port-desc {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 2px;
+        }
+
+        .status {
+            margin-left: auto;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status-success {
+            background: #d5f4e6;
+            color: #27ae60;
+        }
+
+        .status-error {
+            background: #fadbd8;
+            color: #e74c3c;
+        }
+
+        .status-info {
+            background: #d6eaf8;
+            color: #3498db;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="toolbar">
+        <div class="toolbar-group">
+            <label>Port:</label>
+            <input type="text" id="portInput" placeholder="COM3" value="COM3">
+            <button id="btnDetect">Detect</button>
+        </div>
+
+        <div class="toolbar-group">
+            <button id="btnGenerate" class="btn-success">Generate</button>
+            <button id="btnUpload" class="btn-danger">Upload</button>
+        </div>
+
+        <div class="toolbar-group">
+            <label>
+                <input type="checkbox" id="autoUpload"> Auto upload
+            </label>
+            <label>
+                <input type="checkbox" id="confirmDelete"> Confirm delete
+            </label>
+        </div>
+
+        <div class="status" id="statusDisplay"></div>
+    </div>
+
+    <div id="blocklyDiv"></div>
+
+    <div id="codeDiv">
+        <div class="code-header">
+            Arduino Code
+            <button class="copy-btn" onclick="copyCode()">Copy</button>
+        </div>
+        <textarea id="codeArea" readonly></textarea>
+    </div>
+
+    <!-- Port Selection Modal -->
+    <div id="portModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Select Serial Port</h3>
+                <span class="close" onclick="closePortModal()">&times;</span>
+            </div>
+            <div id="portList" class="port-list">
+                <div style="text-align: center; padding: 20px; color: #7f8c8d;">
+                    Detecting ports...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <xml xmlns="https://developers.google.com/blockly/xml" id="toolbox" style="display: none">
+        <category name="ESP32 GPIO" colour="#e74c3c">
+            <block type="esp32_digital_write"></block>
+            <block type="esp32_digital_read"></block>
+            <block type="esp32_analog_read"></block>
+            <block type="esp32_button_read"></block>
+        </category>
+        <category name="Logic" colour="#3498db">
+            <block type="controls_if"></block>
+            <block type="logic_compare"></block>
+            <block type="logic_operation"></block>
+            <block type="logic_boolean"></block>
+        </category>
+        <category name="Delay" colour="#f39c12">
+            <block type="esp32_delay_ms"></block>
+        </category>
+        <category name="Variables" colour="#9b59b6" custom="VARIABLE"></category>
+    </xml>
+
+    <script>
+        // Global variables
+        let workspace;
+        let currentStatus = '';
+
+        // Initialize Blockly
+        function initBlockly() {
+            workspace = Blockly.inject('blocklyDiv', {
+                toolbox: document.getElementById('toolbox'),
+                grid: {
+                    spacing: 20,
+                    length: 3,
+                    colour: '#ccc',
+                    snap: true
+                },
+                zoom: {
+                    controls: true,
+                    wheel: true,
+                    startScale: 1.0,
+                    maxScale: 3,
+                    minScale: 0.3,
+                    scaleSpeed: 1.2
+                },
+                trashcan: true
+            });
+
+            // Auto-generate code when blocks change
+            workspace.addChangeListener(generateArduinoCode);
+        }
+
+        // Generate Arduino code
+        function generateArduinoCode() {
+            try {
+                const code = Blockly.Arduino.workspaceToCode(workspace);
+                document.getElementById('codeArea').value = code;
+                updateStatus('Code generated', 'success');
+            } catch (error) {
+                console.error('Code generation error:', error);
+                updateStatus('Code generation error', 'error');
+            }
+        }
+
+        // Copy code to clipboard
+        function copyCode() {
+            const codeArea = document.getElementById('codeArea');
+            codeArea.select();
+            document.execCommand('copy');
+            updateStatus('Code copied to clipboard', 'success');
+        }
+
+        // Update status display
+        function updateStatus(message, type = 'info') {
+            const statusEl = document.getElementById('statusDisplay');
+            statusEl.textContent = message;
+            statusEl.className = `status status-${type}`;
+
+            // Auto-clear status after 3 seconds
+            setTimeout(() => {
+                if (statusEl.textContent === message) {
+                    statusEl.textContent = '';
+                    statusEl.className = 'status';
+                }
+            }, 3000);
+        }
+
+        // Detect ports
+        async function detectPorts() {
+            const btn = document.getElementById('btnDetect');
+            const originalText = btn.textContent;
+
+            btn.disabled = true;
+            btn.textContent = 'Detecting...';
+            updateStatus('Detecting serial ports...', 'info');
+
+            try {
+                const response = await fetch('/ports');
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to detect ports');
+                }
+
+                console.log('Detected ports:', data.ports);
+
+                if (data.ports.length === 0) {
+                    updateStatus('No serial ports found', 'error');
+                    return;
+                }
+
+                if (data.ports.length === 1) {
+                    // Auto-select single port
+                    const port = data.ports[0];
+                    document.getElementById('portInput').value = port.path;
+                    updateStatus(`Auto-selected: ${port.path} (${port.manufacturer || 'Unknown'})`, 'success');
+                } else {
+                    // Show port selection modal
+                    showPortModal(data.ports);
+                }
+
+            } catch (error) {
+                console.error('Port detection error:', error);
+                updateStatus(`Detection failed: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        // Show port selection modal
+        function showPortModal(ports) {
+            const modal = document.getElementById('portModal');
+            const portList = document.getElementById('portList');
+
+            portList.innerHTML = '';
+
+            ports.forEach(port => {
+                const portItem = document.createElement('div');
+                portItem.className = 'port-item';
+                portItem.onclick = () => selectPort(port.path);
+
+                portItem.innerHTML = `
+                    <div class="port-path">${port.path}</div>
+                    <div class="port-desc">${port.manufacturer || 'Unknown'} - ${port.description || 'Serial Port'}</div>
+                `;
+
+                portList.appendChild(portItem);
+            });
+
+            modal.style.display = 'block';
+        }
+
+        // Select port from modal
+        function selectPort(portPath) {
+            document.getElementById('portInput').value = portPath;
+            closePortModal();
+            updateStatus(`Selected port: ${portPath}`, 'success');
+        }
+
+        // Close port modal
+        function closePortModal() {
+            document.getElementById('portModal').style.display = 'none';
+        }
+
+        // Upload code to ESP32
+        async function uploadCode() {
+            const code = document.getElementById('codeArea').value;
+            const port = document.getElementById('portInput').value;
+
+            if (!code.trim()) {
+                updateStatus('No code to upload', 'error');
+                return;
+            }
+
+            if (!port.trim()) {
+                updateStatus('Please select a port', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btnUpload');
+            const originalText = btn.textContent;
+
+            btn.disabled = true;
+            btn.textContent = 'Uploading...';
+            updateStatus('Uploading to ESP32...', 'info');
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ code, port })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Upload failed');
+                }
+
+                updateStatus(`Upload successful: ${result.stage}`, 'success');
+
+            } catch (error) {
+                console.error('Upload error:', error);
+                updateStatus(`Upload failed: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('DOM loaded, checking Blockly...');
+
+            // Check if Blockly is loaded
+            if (typeof Blockly === 'undefined') {
+                console.error('Blockly not loaded!');
+                updateStatus('Blockly failed to load', 'error');
+                return;
+            }
+
+            console.log('Blockly loaded, checking Arduino generator...');
+
+            // Ensure Arduino generator exists
+            if (!Blockly.Arduino) {
+                console.log('Creating Arduino generator...');
+                Blockly.Arduino = new Blockly.Generator('Arduino');
+            }
+
+            console.log('Initializing workspace...');
+
+            try {
+                initBlockly();
+                console.log('Blockly initialized successfully!');
+                updateStatus('ESP32 Blockly IDE ready', 'success');
+            } catch (error) {
+                console.error('Blockly initialization error:', error);
+                updateStatus('Initialization failed: ' + error.message, 'error');
+            }
+
+            // Button event listeners
+            document.getElementById('btnDetect').addEventListener('click', detectPorts);
+            document.getElementById('btnGenerate').addEventListener('click', generateArduinoCode);
+            document.getElementById('btnUpload').addEventListener('click', uploadCode);
+
+            // Modal event listeners
+            window.onclick = function (event) {
+                const modal = document.getElementById('portModal');
+                if (event.target === modal) {
+                    closePortModal();
+                }
+            };
+
+            // Auto upload if enabled
+            document.getElementById('autoUpload').addEventListener('change', function () {
+                if (this.checked) {
+                    workspace.addChangeListener(function () {
+                        setTimeout(() => {
+                            if (document.getElementById('autoUpload').checked) {
+                                uploadCode();
+                            }
+                        }, 1000);
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
