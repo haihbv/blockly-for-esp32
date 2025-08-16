@@ -74,6 +74,17 @@ if (typeof Blockly !== 'undefined' && Blockly.Blocks) {
     }
   };
 
+  Blockly.Blocks['esp32_high_low'] = {
+    init: function () {
+      this.appendDummyInput()
+        .appendField(new Blockly.FieldDropdown([["HIGH", "HIGH"], ["LOW", "LOW"]]), "STATE");
+      this.setOutput(true, "Boolean");
+      this.setColour(160);
+      this.setTooltip("HIGH or LOW constant value");
+      this.setHelpUrl("");
+    }
+  };
+
 } else {
   console.error('Blockly not available for GPIO blocks');
 }

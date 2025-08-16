@@ -42,6 +42,12 @@
             padding: 0 20px;
             box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
             border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 9999;
+            width: 100%;
         }
 
         .logo {
@@ -154,6 +160,7 @@
             display: flex;
             height: calc(100vh - 70px);
             position: relative;
+            margin-top: 70px;
         }
 
         /* Sidebar */
@@ -716,6 +723,37 @@
         .code-resizer:hover::before {
             opacity: 1;
         }
+
+        /* Blockly elements - ensure they don't push header up */
+        .blocklyTooltipDiv,
+        .blocklyWidgetDiv,
+        .blocklyDropDownDiv,
+        .blocklyDropdownMenu,
+        .blocklyFieldDropdown,
+        .blocklyFieldTextInput {
+            z-index: 8000 !important;
+            position: absolute !important;
+        }
+
+        /* Ensure Blockly text input doesn't interfere with layout */
+        .blocklyHtmlInput {
+            z-index: 8000 !important;
+            position: absolute !important;
+        }
+
+        /* Prevent Blockly context menu from pushing header */
+        .blocklyContextMenu {
+            z-index: 8500 !important;
+            position: absolute !important;
+        }
+
+        /* Fix for any Blockly popup elements */
+        .blocklyDiv .blocklyWidgetDiv,
+        .blocklyDiv .blocklyDropDownDiv,
+        .blocklyDiv .blocklyTooltipDiv {
+            position: fixed !important;
+            z-index: 8000 !important;
+        }
     </style>
 </head>
 
@@ -775,6 +813,10 @@
                         <div class="block-item" data-block="esp32_button_read">
                             <div class="block-icon" style="background: #e74c3c;"></div>
                             <div class="block-name">ButtonRead</div>
+                        </div>
+                        <div class="block-item" data-block="esp32_high_low">
+                            <div class="block-icon" style="background: #e74c3c;"></div>
+                            <div class="block-name">HIGH/LOW</div>
                         </div>
                     </div>
                 </div>
@@ -839,12 +881,12 @@
 
 
                         <div class="block-item" data-block="esp32_while">
-                            <div class="block-icon" style="background: #f39c12;"></div>
-                            <div class="block-name">🟡 WHILE</div>
+                            <div class="block-icon" style="background: #9b59b6;"></div>
+                            <div class="block-name">While</div>
                         </div>
                         <div class="block-item" data-block="controls_repeat_ext">
                             <div class="block-icon" style="background: #9b59b6;"></div>
-                            <div class="block-name">Repeat</div>
+                            <div class="block-name">For</div>
                         </div>
                     </div>
                 </div>
@@ -854,18 +896,18 @@
                     <div class="category-header category-variables" onclick="toggleCategory(this)">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <div class="category-icon">📦</div>
-                            <span>Biến</span>
+                            <span>Variable</span>
                         </div>
                         <span class="category-arrow">▼</span>
                     </div>
                     <div class="category-content">
                         <div class="block-item" data-block="variables_get">
                             <div class="block-icon" style="background: #1abc9c;"></div>
-                            <div class="block-name">Lấy Biến</div>
+                            <div class="block-name">Get Variable</div>
                         </div>
                         <div class="block-item" data-block="variables_set">
                             <div class="block-icon" style="background: #1abc9c;"></div>
-                            <div class="block-name">Gán Biến</div>
+                            <div class="block-name">Set Variable</div>
                         </div>
                     </div>
                 </div>
@@ -875,18 +917,22 @@
                     <div class="category-header category-math" onclick="toggleCategory(this)">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <div class="category-icon">🔢</div>
-                            <span>Toán Học</span>
+                            <span>Math</span>
                         </div>
                         <span class="category-arrow">▼</span>
                     </div>
                     <div class="category-content">
                         <div class="block-item" data-block="math_number">
                             <div class="block-icon" style="background: #34495e;"></div>
-                            <div class="block-name">Số</div>
+                            <div class="block-name">Number</div>
                         </div>
                         <div class="block-item" data-block="math_arithmetic">
                             <div class="block-icon" style="background: #34495e;"></div>
-                            <div class="block-name">Phép Tính</div>
+                            <div class="block-name">Arithmetic</div>
+                        </div>
+                        <div class="block-item" data-block="text">
+                            <div class="block-icon" style="background: #27ae60;"></div>
+                            <div class="block-name">Text</div>
                         </div>
                     </div>
                 </div>
@@ -1120,7 +1166,20 @@ void loop() {
         // Generate Arduino code from blocks
         function generateArduinoCode() {
             try {
-                if (!workspace) return;
+                if (!workspace) {
+                    console.error('Workspace not available');
+                    return;
+                }
+
+                console.log('Generating Arduino code...');
+                console.log('Available generators:', Object.keys(Blockly.Arduino.forBlock || {}));
+
+                // Check if we have any blocks
+                const allBlocks = workspace.getAllBlocks();
+                console.log('Total blocks in workspace:', allBlocks.length);
+                allBlocks.forEach(block => {
+                    console.log('Block type:', block.type);
+                });
 
                 let code = Blockly.Arduino.workspaceToCode(workspace);
                 const codeArea = document.getElementById('codeArea');

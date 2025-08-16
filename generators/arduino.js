@@ -103,8 +103,13 @@ Blockly.Arduino['esp32_analog_read'] = function (block) {
 Blockly.Arduino['esp32_button_read'] = function (block) {
   const pin = block.getFieldValue('PIN');
   Blockly.Arduino.setups_['pin_' + pin] = 'pinMode(' + pin + ', INPUT_PULLUP);';
-  const code = '!digitalRead(' + pin + ')';
+  const code = 'digitalRead(' + pin + ')';
   return [code, Blockly.Arduino.ORDER_ATOMIC];
+};
+
+Blockly.Arduino['esp32_high_low'] = function (block) {
+  const state = block.getFieldValue('STATE');
+  return [state, Blockly.Arduino.ORDER_ATOMIC];
 };
 
 Blockly.Arduino['esp32_delay_ms'] = function (block) {
@@ -281,12 +286,114 @@ Blockly.Arduino['math_arithmetic'] = function (block) {
   return [code, order];
 };
 
+// Text blocks
+Blockly.Arduino['text'] = function (block) {
+  const code = '"' + block.getFieldValue('TEXT') + '"';
+  return [code, Blockly.Arduino.ORDER_ATOMIC];
+};
+
+Blockly.Arduino['text_print'] = function (block) {
+  const msg = Blockly.Arduino.valueToCode(block, 'TEXT', Blockly.Arduino.ORDER_NONE) || '""';
+  Blockly.Arduino.setups_['serial_init'] = 'Serial.begin(115200);';
+  return 'Serial.println(' + msg + ');\n';
+};
+
+// Comments
+Blockly.Arduino['comment'] = function (block) {
+  const comment = block.getFieldValue('COMMENT');
+  return '// ' + comment + '\n';
+};
+
+// Procedures/Functions
+Blockly.Arduino['procedures_defnoreturn'] = function (block) {
+  const funcName = Blockly.Arduino.nameDB_.getName(block.getFieldValue('NAME'), Blockly.Procedures.NAME_TYPE);
+  let branch = Blockly.Arduino.statementToCode(block, 'STACK');
+
+  if (branch) {
+    branch = Blockly.Arduino.addIndent(branch.trim()) + '\n';
+  }
+
+  const code = 'void ' + funcName + '() {\n' + branch + '}\n';
+  Blockly.Arduino.definitions_[funcName] = code;
+  return null;
+};
+
+Blockly.Arduino['procedures_callnoreturn'] = function (block) {
+  const funcName = Blockly.Arduino.nameDB_.getName(block.getFieldValue('NAME'), Blockly.Procedures.NAME_TYPE);
+  return funcName + '();\n';
+};
+
+// Additional common blocks that might be missing
+Blockly.Arduino['text_length'] = function (block) {
+  const text = Blockly.Arduino.valueToCode(block, 'VALUE', Blockly.Arduino.ORDER_MEMBER) || '""';
+  return [text + '.length()', Blockly.Arduino.ORDER_MEMBER];
+};
+
+Blockly.Arduino['text_isEmpty'] = function (block) {
+  const text = Blockly.Arduino.valueToCode(block, 'VALUE', Blockly.Arduino.ORDER_MEMBER) || '""';
+  return [text + '.length() == 0', Blockly.Arduino.ORDER_EQUALITY];
+};
+
+Blockly.Arduino['text_join'] = function (block) {
+  const itemCount = block.itemCount_;
+  if (itemCount === 0) {
+    return ['""', Blockly.Arduino.ORDER_ATOMIC];
+  } else if (itemCount === 1) {
+    const element = Blockly.Arduino.valueToCode(block, 'ADD0', Blockly.Arduino.ORDER_NONE) || '""';
+    return [element, Blockly.Arduino.ORDER_ATOMIC];
+  } else {
+    const elements = [];
+    for (let i = 0; i < itemCount; i++) {
+      elements[i] = Blockly.Arduino.valueToCode(block, 'ADD' + i, Blockly.Arduino.ORDER_NONE) || '""';
+    }
+    const code = 'String(' + elements.join(') + String(') + ')';
+    return [code, Blockly.Arduino.ORDER_FUNCTION_CALL];
+  }
+};
+
+// Lists (Arrays) basic support
+Blockly.Arduino['lists_create_empty'] = function (block) {
+  return ['{}', Blockly.Arduino.ORDER_ATOMIC];
+};
+
+Blockly.Arduino['lists_create_with'] = function (block) {
+  const elements = [];
+  for (let i = 0; i < block.itemCount_; i++) {
+    elements[i] = Blockly.Arduino.valueToCode(block, 'ADD' + i, Blockly.Arduino.ORDER_NONE) || '0';
+  }
+  const code = '{' + elements.join(', ') + '}';
+  return [code, Blockly.Arduino.ORDER_ATOMIC];
+};
+
+// For loop improvements
+Blockly.Arduino['controls_for'] = function (block) {
+  const variable = Blockly.Arduino.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Variables.NAME_TYPE);
+  const argument0 = Blockly.Arduino.valueToCode(block, 'FROM', Blockly.Arduino.ORDER_ASSIGNMENT) || '0';
+  const argument1 = Blockly.Arduino.valueToCode(block, 'TO', Blockly.Arduino.ORDER_ASSIGNMENT) || '0';
+  const increment = Blockly.Arduino.valueToCode(block, 'BY', Blockly.Arduino.ORDER_ASSIGNMENT) || '1';
+  let branch = Blockly.Arduino.statementToCode(block, 'DO');
+
+  branch = branch.replace(/^  /gm, '');
+  if (branch.trim()) {
+    branch = Blockly.Arduino.addIndent(branch.trim()) + '\n';
+  }
+
+  let code;
+  if (parseFloat(increment) == 1) {
+    code = 'for (int ' + variable + ' = ' + argument0 + '; ' + variable + ' <= ' + argument1 + '; ' + variable + '++) {\n' + branch + '}\n';
+  } else {
+    code = 'for (int ' + variable + ' = ' + argument0 + '; ' + variable + ' <= ' + argument1 + '; ' + variable + ' += ' + increment + ') {\n' + branch + '}\n';
+  }
+  return code;
+};
+
 // Mapping cho API mới
 if (!Blockly.Arduino.forBlock) Blockly.Arduino.forBlock = Object.create(null);
 Blockly.Arduino.forBlock['esp32_digital_write'] = Blockly.Arduino['esp32_digital_write'];
 Blockly.Arduino.forBlock['esp32_digital_read'] = Blockly.Arduino['esp32_digital_read'];
 Blockly.Arduino.forBlock['esp32_analog_read'] = Blockly.Arduino['esp32_analog_read'];
 Blockly.Arduino.forBlock['esp32_button_read'] = Blockly.Arduino['esp32_button_read'];
+Blockly.Arduino.forBlock['esp32_high_low'] = Blockly.Arduino['esp32_high_low'];
 Blockly.Arduino.forBlock['esp32_delay_ms'] = Blockly.Arduino['esp32_delay_ms'];
 Blockly.Arduino.forBlock['esp32_while'] = Blockly.Arduino['esp32_while'];
 
@@ -304,7 +411,33 @@ Blockly.Arduino.forBlock['variables_set'] = Blockly.Arduino['variables_set'];
 Blockly.Arduino.forBlock['math_number'] = Blockly.Arduino['math_number'];
 Blockly.Arduino.forBlock['math_arithmetic'] = Blockly.Arduino['math_arithmetic'];
 
+// Text and other common blocks
+Blockly.Arduino.forBlock['text'] = Blockly.Arduino['text'];
+Blockly.Arduino.forBlock['text_print'] = Blockly.Arduino['text_print'];
+Blockly.Arduino.forBlock['text_length'] = Blockly.Arduino['text_length'];
+Blockly.Arduino.forBlock['text_isEmpty'] = Blockly.Arduino['text_isEmpty'];
+Blockly.Arduino.forBlock['text_join'] = Blockly.Arduino['text_join'];
+Blockly.Arduino.forBlock['comment'] = Blockly.Arduino['comment'];
+Blockly.Arduino.forBlock['procedures_defnoreturn'] = Blockly.Arduino['procedures_defnoreturn'];
+Blockly.Arduino.forBlock['procedures_callnoreturn'] = Blockly.Arduino['procedures_callnoreturn'];
+
+// Lists and additional controls
+Blockly.Arduino.forBlock['lists_create_empty'] = Blockly.Arduino['lists_create_empty'];
+Blockly.Arduino.forBlock['lists_create_with'] = Blockly.Arduino['lists_create_with'];
+Blockly.Arduino.forBlock['controls_for'] = Blockly.Arduino['controls_for'];
+
 console.log('[Arduino generator] Registered blocks:', Object.keys(Blockly.Arduino.forBlock));
+
+// Error handler cho các block types chưa được implement
+Blockly.Arduino.noGeneratorCodeInline = function (block) {
+  console.warn('[Arduino Generator] No generator found for block type:', block.type);
+  return ['/* Block type "' + block.type + '" not implemented */', Blockly.Arduino.ORDER_ATOMIC];
+};
+
+Blockly.Arduino.noGeneratorCodeLine = function (block) {
+  console.warn('[Arduino Generator] No generator found for block type:', block.type);
+  return '/* Block type "' + block.type + '" not implemented */\n';
+};
 
 Blockly.Arduino.init = function () {
   Blockly.Arduino.definitions_ = Object.create(null);
@@ -395,4 +528,49 @@ Blockly.Arduino.workspaceToCode = function (ws) {
     if (typeof line === 'string') code += line;
   }
   return Blockly.Arduino.finish(code);
+};
+
+// Override blockToCode để xử lý các block chưa có generator
+const originalBlockToCode = Blockly.Arduino.blockToCode;
+Blockly.Arduino.blockToCode = function (block) {
+  if (!block || block.disabled) {
+    return '';
+  }
+
+  const func = this.forBlock[block.type];
+  if (func) {
+    // Gọi generator function có sẵn
+    const code = func.call(this, block);
+    let result;
+    if (Array.isArray(code)) {
+      // Value block - trả về [code, order] 
+      result = [code[0] || '', code[1] || this.ORDER_ATOMIC];
+    } else {
+      // Statement block - trả về string
+      result = code || '';
+    }
+
+    // Xử lý kết nối với block tiếp theo (chỉ cho statement blocks)
+    if (typeof result === 'string' && block.nextConnection) {
+      result = this.scrub_(block, result);
+    }
+
+    return result;
+  } else {
+    // Block type chưa có generator
+    console.warn('No generator for block type: ' + block.type);
+
+    // Kiểm tra xem block có output hay không để quyết định trả về format nào
+    if (block.outputConnection) {
+      // Value block - trả về array
+      return ['/* ' + block.type + ' */', this.ORDER_ATOMIC];
+    } else {
+      // Statement block - trả về string và xử lý next connection
+      let result = '/* ' + block.type + ' */\n';
+      if (block.nextConnection) {
+        result = this.scrub_(block, result);
+      }
+      return result;
+    }
+  }
 };
