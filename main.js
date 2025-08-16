@@ -44,7 +44,7 @@ function startServer() {
 
         // Routes
         expressApp.get('/', (req, res) => {
-            res.sendFile(path.join(__dirname, 'index_new.html'));
+            res.sendFile(path.join(__dirname, 'index.html'));
         });
 
         expressApp.post('/upload', async (req, res) => {
@@ -77,22 +77,22 @@ function startServer() {
                 try {
                     console.log('Compiling...');
                     execSync(compileCmd, { stdio: 'pipe', timeout: 30000 });
-                    
+
                     console.log('Uploading...');
                     execSync(uploadCmd, { stdio: 'pipe', timeout: 30000 });
-                    
-                    res.json({ 
-                        success: true, 
+
+                    res.json({
+                        success: true,
                         stage: 'Upload Complete',
                         message: `Successfully uploaded to ${uploadPort}`
                     });
                 } catch (cmdError) {
                     console.log('Arduino CLI not available or failed:', cmdError.message);
-                    
+
                     // Return success with manual instruction
-                    res.json({ 
-                        success: true, 
-                        stage: 'Code Generated', 
+                    res.json({
+                        success: true,
+                        stage: 'Code Generated',
                         message: `Code saved to ${sketchFile}. Please upload manually using Arduino IDE.`,
                         file: sketchFile
                     });
@@ -100,7 +100,7 @@ function startServer() {
 
             } catch (error) {
                 console.error('Upload error:', error);
-                res.status(500).json({ 
+                res.status(500).json({
                     error: `Upload failed: ${error.message}`,
                     details: error.stack
                 });
@@ -116,18 +116,18 @@ function startServer() {
                 // Method 1: Try PowerShell
                 try {
                     const psCommand = 'powershell -Command "Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Description, Manufacturer | ConvertTo-Json"';
-                    const output = execSync(psCommand, { 
-                        encoding: 'utf8', 
+                    const output = execSync(psCommand, {
+                        encoding: 'utf8',
                         timeout: 5000,
                         stdio: 'pipe'
                     });
-                    
+
                     if (output.trim()) {
                         let psData = JSON.parse(output);
                         if (!Array.isArray(psData)) {
                             psData = [psData];
                         }
-                        
+
                         psData.forEach(port => {
                             if (port.DeviceID) {
                                 detectedPorts.push({
@@ -146,12 +146,12 @@ function startServer() {
                 if (detectedPorts.length === 0) {
                     try {
                         const regCommand = 'reg query HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM /v \\VCP';
-                        const regOutput = execSync(regCommand, { 
-                            encoding: 'utf8', 
+                        const regOutput = execSync(regCommand, {
+                            encoding: 'utf8',
                             timeout: 3000,
                             stdio: 'pipe'
                         });
-                        
+
                         const lines = regOutput.split('\n');
                         lines.forEach(line => {
                             const match = line.match(/\s+(COM\d+)\s+/);
@@ -171,15 +171,15 @@ function startServer() {
                 // Method 3: Test common ports
                 if (detectedPorts.length === 0) {
                     console.log('Testing common COM ports...');
-                    
+
                     for (let i = 1; i <= 10; i++) {
                         try {
                             // Try to access port with mode command
-                            execSync(`mode COM${i}: baud=9600 parity=n data=8 stop=1`, { 
-                                stdio: 'pipe', 
-                                timeout: 1000 
+                            execSync(`mode COM${i}: baud=9600 parity=n data=8 stop=1`, {
+                                stdio: 'pipe',
+                                timeout: 1000
                             });
-                            
+
                             detectedPorts.push({
                                 path: `COM${i}`,
                                 manufacturer: 'Detected',
@@ -208,14 +208,14 @@ function startServer() {
 
             } catch (error) {
                 console.error('Port detection error:', error);
-                
+
                 // Emergency fallback
                 const fallbackPorts = [
                     { path: 'COM3', manufacturer: 'Fallback', description: 'Default Port' },
                     { path: 'COM4', manufacturer: 'Fallback', description: 'Default Port' },
                     { path: 'COM5', manufacturer: 'Fallback', description: 'Default Port' }
                 ];
-                
+
                 res.json({ ports: fallbackPorts });
             }
         });
@@ -223,7 +223,7 @@ function startServer() {
         // Start server
         server = expressApp.listen(3000, () => {
             console.log('Server running on http://localhost:3000');
-            
+
             // Show window after server is ready
             setTimeout(() => {
                 if (mainWindow) {
@@ -236,7 +236,7 @@ function startServer() {
 
     } catch (error) {
         console.error('Error starting server:', error);
-        
+
         if (mainWindow) {
             const errorHtml = `
                 <html>
@@ -335,7 +335,7 @@ function createMenu() {
                                 nodeIntegration: false
                             }
                         });
-                        
+
                         const aboutHtml = `
                             <html>
                                 <head><title>About</title></head>
@@ -349,7 +349,7 @@ function createMenu() {
                                 </body>
                             </html>
                         `;
-                        
+
                         aboutWindow.loadURL('data:text/html,' + encodeURIComponent(aboutHtml));
                     }
                 }
