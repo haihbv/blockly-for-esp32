@@ -5,8 +5,8 @@
   "main": "main.js",
   "homepage": "./",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "electron .",
+    "dev": "electron . --dev",
     "electron": "electron .",
     "electron-dev": "electron . --dev",
     "build": "electron-builder",

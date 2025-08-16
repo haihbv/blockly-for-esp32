@@ -7,7 +7,7 @@ if (typeof Blockly !== 'undefined' && Blockly.Blocks) {
   Blockly.Blocks['esp32_digital_write'] = {
     init: function () {
       this.appendDummyInput()
-        .appendField("Set GPIO")
+        .appendField("Digital Write")
         .appendField(new Blockly.FieldTextInput("2", function (text) {
           // Validate that input is a number between 0-40
           const n = parseInt(text);
@@ -26,7 +26,7 @@ if (typeof Blockly !== 'undefined' && Blockly.Blocks) {
   Blockly.Blocks['esp32_digital_read'] = {
     init: function () {
       this.appendDummyInput()
-        .appendField("Read GPIO")
+        .appendField("Digital Read")
         .appendField(new Blockly.FieldTextInput("2", function (text) {
           // Validate that input is a number between 0-40
           const n = parseInt(text);
