@@ -269,16 +269,7 @@ Blockly.Arduino['controls_whileUntil'] = function (block) {
   }
 };
 
-Blockly.Arduino['variables_get'] = function (block) {
-  const code = Blockly.Arduino.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Variables.NAME_TYPE);
-  return [code, Blockly.Arduino.ORDER_ATOMIC];
-};
-
-Blockly.Arduino['variables_set'] = function (block) {
-  const argument0 = Blockly.Arduino.valueToCode(block, 'VALUE', Blockly.Arduino.ORDER_ASSIGNMENT) || '0';
-  const varName = Blockly.Arduino.nameDB_.getName(block.getFieldValue('VAR'), Blockly.Variables.NAME_TYPE);
-  return varName + ' = ' + argument0 + ';\n';
-};
+// Variables blocks removed
 
 Blockly.Arduino['math_number'] = function (block) {
   const code = parseFloat(block.getFieldValue('NUM'));
@@ -313,6 +304,15 @@ Blockly.Arduino['text'] = function (block) {
   return [code, Blockly.Arduino.ORDER_ATOMIC];
 };
 
+// Raw text/code block (no quotes added) - user responsibility
+Blockly.Arduino['esp32_text_raw'] = function (block) {
+  let raw = block.getFieldValue('RAW') || '';
+  // Trim only trailing spaces that might break code formatting? Keep as-is except leading/trailing
+  raw = raw.trim();
+  if (!raw) raw = '""'; // fallback empty string constant
+  return [raw, Blockly.Arduino.ORDER_ATOMIC];
+};
+
 Blockly.Arduino['text_print'] = function (block) {
   const msg = Blockly.Arduino.valueToCode(block, 'TEXT', Blockly.Arduino.ORDER_NONE) || '""';
   Blockly.Arduino.setups_['serial_init'] = 'Serial.begin(115200);';
@@ -323,7 +323,7 @@ Blockly.Arduino['text_print'] = function (block) {
 Blockly.Arduino['esp32_serial_begin'] = function (block) {
   const baud = block.getFieldValue('BAUD') || '115200';
   Blockly.Arduino.setups_['serial_init'] = 'Serial.begin(' + baud + ');';
-  return '// Serial.begin(' + baud + ')\n';
+  return '';
 };
 
 Blockly.Arduino['esp32_serial_print'] = function (block) {
@@ -466,13 +466,13 @@ Blockly.Arduino.forBlock['logic_operation'] = Blockly.Arduino['logic_operation']
 Blockly.Arduino.forBlock['logic_boolean'] = Blockly.Arduino['logic_boolean'];
 Blockly.Arduino.forBlock['controls_repeat_ext'] = Blockly.Arduino['controls_repeat_ext'];
 Blockly.Arduino.forBlock['controls_whileUntil'] = Blockly.Arduino['controls_whileUntil'];
-Blockly.Arduino.forBlock['variables_get'] = Blockly.Arduino['variables_get'];
-Blockly.Arduino.forBlock['variables_set'] = Blockly.Arduino['variables_set'];
+// variables_get / variables_set mappings removed
 Blockly.Arduino.forBlock['math_number'] = Blockly.Arduino['math_number'];
 Blockly.Arduino.forBlock['math_arithmetic'] = Blockly.Arduino['math_arithmetic'];
 
 // Text and other common blocks
 Blockly.Arduino.forBlock['text'] = Blockly.Arduino['text'];
+Blockly.Arduino.forBlock['esp32_text_raw'] = Blockly.Arduino['esp32_text_raw'];
 Blockly.Arduino.forBlock['text_print'] = Blockly.Arduino['text_print'];
 Blockly.Arduino.forBlock['text_length'] = Blockly.Arduino['text_length'];
 Blockly.Arduino.forBlock['text_isEmpty'] = Blockly.Arduino['text_isEmpty'];
