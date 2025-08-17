@@ -122,6 +122,19 @@ Blockly.Arduino['esp32_relay_set'] = function (block) {
   const pin = block.getFieldValue('PIN');
   const state = block.getFieldValue('STATE');
   Blockly.Arduino.setups_['pin_' + pin] = 'pinMode(' + pin + ', OUTPUT);';
+  // Track initial states if placed inside setup block
+  if (!Blockly.Arduino.relayInitialStates_) Blockly.Arduino.relayInitialStates_ = {};
+  let inSetup = false;
+  let parent = block.getParent && block.getParent();
+  while (parent) {
+    if (parent.type === 'esp32_setup') { inSetup = true; break; }
+    parent = parent.getParent && parent.getParent();
+  }
+  if (inSetup) {
+    // Remember initial state, but don't emit digitalWrite (user wants clean setup)
+    Blockly.Arduino.relayInitialStates_[pin] = state; 
+    return '';
+  }
   return 'digitalWrite(' + pin + ', ' + state + ');\n';
 };
 Blockly.Arduino['esp32_relay_blink'] = function (block) {
