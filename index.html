@@ -27,6 +27,11 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --header-height: 70px;
+            --status-height: 42px; /* approximate (padding 10 + font + border) */
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             /* Removed purple gradient */
@@ -172,9 +177,9 @@
         /* Main Content */
         .main-content {
             display: flex;
-            height: calc(100vh - 70px);
+            height: calc(100vh - var(--header-height) - var(--status-height));
             position: relative;
-            margin-top: 70px;
+            margin-top: var(--header-height);
         }
 
         /* Sidebar */
@@ -513,6 +518,12 @@
             justify-content: space-between;
             align-items: center;
             font-size: 12px;
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 9999;
+            height: var(--status-height);
         }
 
         .status-left {
@@ -1557,12 +1568,14 @@ void loop() {
                 block.initSvg();
                 block.render();
 
-                // Position the block in the center
+                // Position block at the center of the CURRENT viewport instead of origin.
+                // Previously we ignored viewLeft/viewTop so block appeared relative to (0,0)
+                // khiến workspace có cảm giác bị kéo lên góc trên. Now we include them.
                 const metrics = workspace.getMetrics();
-                block.moveBy(
-                    metrics.viewWidth / 2 - block.width / 2,
-                    metrics.viewHeight / 2 - block.height / 2
-                );
+                const targetX = metrics.viewLeft + metrics.viewWidth / 2 - block.width / 2;
+                const targetY = metrics.viewTop + metrics.viewHeight / 2 - block.height / 2;
+                // New blocks start near (0,0); moveBy(delta) is sufficient
+                block.moveBy(targetX, targetY);
 
                 console.log('Block added successfully:', blockType);
 
@@ -1578,8 +1591,20 @@ void loop() {
             if (!workspace) return;
 
             if (confirm('🗑️ Are you sure you want to delete all blocks?')) {
-                workspace.clear();
-                updateStatus('Workspace cleared', 'info');
+                try {
+                    const prev = workspace.getMetrics();
+                    workspace.clear();
+                    // Restore previous scroll position if API available
+                    if (typeof workspace.scroll === 'function') {
+                        workspace.scroll(prev.viewLeft, prev.viewTop);
+                    } else if (workspace.scrollbar && typeof workspace.scrollbar.set === 'function') {
+                        workspace.scrollbar.set(prev.viewLeft, prev.viewTop);
+                    }
+                    updateStatus('Workspace cleared', 'info');
+                } catch (e) {
+                    console.warn('Clear workspace scroll restore failed:', e);
+                    updateStatus('Workspace cleared', 'info');
+                }
             }
         }
 
@@ -1620,9 +1645,20 @@ void loop() {
                 const reader = new FileReader();
                 reader.onload = function (e) {
                     try {
+                        const prev = workspace.getMetrics();
                         const xml = Blockly.Xml.textToDom(e.target.result);
                         workspace.clear();
                         Blockly.Xml.domToWorkspace(xml, workspace);
+                        // Restore viewport position
+                        try {
+                            if (typeof workspace.scroll === 'function') {
+                                workspace.scroll(prev.viewLeft, prev.viewTop);
+                            } else if (workspace.scrollbar && typeof workspace.scrollbar.set === 'function') {
+                                workspace.scrollbar.set(prev.viewLeft, prev.viewTop);
+                            }
+                        } catch (errScroll) {
+                            console.warn('Restore scroll after load failed:', errScroll);
+                        }
                         updateStatus('📁 Project loaded', 'success');
                     } catch (error) {
                         console.error('Load error:', error);
