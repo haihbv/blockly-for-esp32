@@ -2,6 +2,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 let serverInstance = null;
 
@@ -16,20 +17,51 @@ function startServer(options = {}) {
             let portCache = { timestamp: 0, ports: [] };
 
             app.use(express.json({ limit: '10mb' }));
-            app.use(express.static('.'));
-            app.get('/', (_req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+
+            // Resolve arduino-cli path (supports bundled portable binary in bin/)
+            function getArduinoCli() {
+                const exeName = process.platform === 'win32' ? 'arduino-cli.exe' : 'arduino-cli';
+                const local = path.join(__dirname, 'bin', exeName);
+                if (fs.existsSync(local)) return `"${local}"`;
+                return 'arduino-cli'; // fallback to PATH
+            }
+            const staticRoot = path.join(__dirname);
+            app.use(express.static(staticRoot));
+            app.get('/', (_req, res) => res.sendFile(path.join(staticRoot, 'index.html')));
+
+            // Writable sketch directory resolver
+            function resolveSketchDir() {
+                if (process.env.ESP32_BLOCKLY_SKETCH_DIR) return process.env.ESP32_BLOCKLY_SKETCH_DIR;
+                const packaged = __dirname.includes('app.asar');
+                if (packaged) {
+                    // Try Electron userData path when available
+                    try {
+                        const { app: electronApp } = require('electron');
+                        if (electronApp && electronApp.getPath) {
+                            return path.join(electronApp.getPath('userData'), 'temp_sketch');
+                        }
+                    } catch (_) { /* ignore */ }
+                    return path.join(os.homedir(), 'ESP32Blockly', 'temp_sketch');
+                }
+                return path.join(process.cwd(), 'temp_sketch');
+            }
+            function ensureSketchDir() {
+                const d = resolveSketchDir();
+                if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+                return d;
+            }
 
             app.post('/upload', async (req, res) => {
                 try {
                     const { code, port: devicePort } = req.body;
                     if (!code || !code.trim()) return res.status(400).json({ error: 'No code provided' });
-                    const sketchDir = path.join(__dirname, 'temp_sketch');
-                    if (!fs.existsSync(sketchDir)) fs.mkdirSync(sketchDir, { recursive: true });
+                    const sketchDir = ensureSketchDir();
                     const sketchFile = path.join(sketchDir, 'temp_sketch.ino');
                     fs.writeFileSync(sketchFile, code, 'utf8');
                     const uploadPort = devicePort || 'COM3';
-                    const compileCmd = `arduino-cli compile --fqbn esp32:esp32:esp32 "${sketchFile}"`;
-                    const uploadCmd = `arduino-cli upload -p ${uploadPort} --fqbn esp32:esp32:esp32 "${sketchFile}"`;
+                    const cli = getArduinoCli();
+                    const compileCmd = `${cli} compile --fqbn esp32:esp32:esp32 "${sketchFile}"`;
+                    const uploadCmd = `${cli} upload -p ${uploadPort} --fqbn esp32:esp32:esp32 "${sketchFile}"`;
                     try {
                         execSync(compileCmd, { stdio: 'pipe', timeout: 30000 });
                         execSync(uploadCmd, { stdio: 'pipe', timeout: 30000 });
@@ -47,12 +79,12 @@ function startServer(options = {}) {
                 try {
                     const { code } = req.body;
                     if (!code || !code.trim()) return res.status(400).json({ error: 'No code provided' });
-                    const sketchDir = path.join(__dirname, 'temp_sketch');
-                    if (!fs.existsSync(sketchDir)) fs.mkdirSync(sketchDir, { recursive: true });
+                    const sketchDir = ensureSketchDir();
                     const sketchFile = path.join(sketchDir, 'temp_sketch.ino');
                     fs.writeFileSync(sketchFile, code, 'utf8');
                     const { execSync } = require('child_process');
-                    const compileCmd = `arduino-cli compile --fqbn esp32:esp32:esp32 "${sketchFile}"`;
+                    const cli = getArduinoCli();
+                    const compileCmd = `${cli} compile --fqbn esp32:esp32:esp32 "${sketchFile}"`;
                     try {
                         const out = execSync(compileCmd, { encoding: 'utf8', stdio: 'pipe', timeout: 45000 });
                         res.json({ success: true, stage: 'Compile Complete', message: 'Compilation successful', output: out, file: sketchFile });

@@ -38,6 +38,10 @@
       "blocks/**/*",
       "generators/**/*",
       "blockly/**/*",
+      "server.js",
+      "utils/**/*",
+      "temp_sketch/**/*",
+      "bin/**/*",
       "node_modules/**/*"
     ],
     "win": {
