@@ -12,12 +12,12 @@
     <script src="https://unpkg.com/blockly/msg/en.js"></script>
 
     <!-- Custom blocks and generators -->
-    <script src="./blocks/gpio.js"></script>
+    <script src="./blocks/gpio.js?v=1.1"></script>
     <script src="./blocks/delay.js"></script>
     <script src="./blocks/structure.js"></script>
     <script src="./blocks/serial.js"></script>
     <script src="./blocks/text_raw.js"></script>
-    <script src="./generators/arduino.js"></script>
+    <script src="./generators/arduino.js?v=1.1"></script>
 
     <style>
         * {
@@ -1313,11 +1313,45 @@ void loop() {
                 let code = Blockly.Arduino.workspaceToCode(workspace);
                 const codeArea = document.getElementById('codeArea');
 
+                // ================= PinMode Validation & Highlight =================
+                // Collect declared pins via esp32_pin_mode blocks
+                const declaredPins = new Set();
+                const pinUsers = []; // {block, pin}
+                workspace.getAllBlocks(false).forEach(b => {
+                    if (b.type === 'esp32_pin_mode') {
+                        declaredPins.add(b.getFieldValue('PIN'));
+                    } else if (b.type === 'esp32_digital_write' || b.type === 'esp32_digital_read' || b.type === 'esp32_button_read') {
+                        pinUsers.push({ block: b, pin: b.getFieldValue('PIN') });
+                    }
+                });
+                // Clear old highlights
+                workspace.getAllBlocks(false).forEach(b => b.setWarningText(null));
+                let missingCount = 0;
+                pinUsers.forEach(u => {
+                    if (!declaredPins.has(u.pin)) {
+                        missingCount++;
+                        u.block.setWarningText('Missing pinMode for pin ' + u.pin);
+                        try { // add glow if available
+                            Blockly.Events.disable();
+                            if (workspace) {
+                                u.block.addSelect(); // visual select
+                            }
+                        } finally { Blockly.Events.enable(); }
+                    }
+                });
+                if (missingCount) {
+                    updateStatus('⚠ Thiếu pinMode cho ' + missingCount + ' block GPIO', 'error');
+                }
+                // ==================================================================
+
                 if (code.trim()) {
                     // Auto format the generated code
                     code = formatArduinoCode(code);
                     codeArea.value = code;
                     updateStatus('Code generated and formatted successfully', 'success');
+                    if (missingCount) {
+                        updateStatus('Code generated nhưng còn thiếu pinMode (' + missingCount + ')', 'error');
+                    }
                 } else {
                     // Show default template when no blocks (VS Code style)
                     codeArea.value = `/*
@@ -1566,7 +1600,8 @@ void loop() {
                             Blockly.Arduino['esp32_pin_mode'] = function (block) {
                                 const pin = block.getFieldValue('PIN');
                                 const mode = block.getFieldValue('MODE');
-                                return 'pinMode(' + pin + ', ' + mode + ');\n';
+                                Blockly.Arduino.setups_['pin_' + pin] = 'pinMode(' + pin + ', ' + mode + ');';
+                                return '';
                             };
                             Blockly.Arduino.forBlock['esp32_pin_mode'] = Blockly.Arduino['esp32_pin_mode'];
                         }
