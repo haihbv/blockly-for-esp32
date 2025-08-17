@@ -157,137 +157,26 @@ function startServer() {
 
         expressApp.get('/ports', async (req, res) => {
             try {
-                const now = Date.now();
-                // Reuse cache if younger than 3s
-                if (now - portCache.timestamp < 3000 && portCache.ports.length) {
-                    return res.json({ ports: portCache.ports });
+                // Fast in-memory cache (already ensured above) still used for /ports endpoint
+                const age = Date.now() - portCache.timestamp;
+                if (age < 2500 && portCache.ports.length) {
+                    return res.json({ ports: portCache.ports, cached: true });
                 }
 
-                console.log('Detecting serial ports (fresh scan)...');
-
-                const portsMap = new Map(); // path -> info
-
-                const addPort = (path, manufacturer = 'Unknown', description = 'Serial Port') => {
-                    if (!path) return;
-                    // Normalize like COM47 etc.
-                    const normalized = path.toUpperCase().trim();
-                    if (!/^COM\d+$/.test(normalized)) return; // keep only COM style for now
-                    // Prefer richer description if already exists
-                    if (portsMap.has(normalized)) {
-                        const existing = portsMap.get(normalized);
-                        if (existing && existing.description === 'Serial Port' && description !== 'Serial Port') {
-                            portsMap.set(normalized, { path: normalized, manufacturer, description });
-                        }
-                    } else {
-                        portsMap.set(normalized, { path: normalized, manufacturer, description });
-                    }
-                };
-
-                // Method 1: WMI (more comprehensive, includes high COM numbers)
-                try {
-                    const psCommand = 'powershell -NoProfile -Command "Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match \'[(]COM[0-9]+[)]\' } | Select-Object Name, Manufacturer | ConvertTo-Json -Depth 2"';
-                    const output = execSync(psCommand, {
-                        encoding: 'utf8',
-                        timeout: 6000,
-                        stdio: 'pipe'
-                    });
-                    if (output.trim()) {
-                        let data = JSON.parse(output);
-                        if (!Array.isArray(data)) data = [data];
-                        data.forEach(d => {
-                            if (d && d.Name) {
-                                const match = d.Name.match(/\(COM(\d+)\)/i);
-                                if (match) {
-                                    addPort(`COM${match[1]}`, d.Manufacturer || 'WMI', d.Name.replace(/\s*\(COM\d+\)\s*/i, '').trim() || 'Serial Device');
-                                }
-                            }
-                        });
-                    }
-                } catch (e) {
-                    console.log('WMI PnPEntity detection failed:', e.message);
-                }
-
-                // Method 2: Legacy Win32_SerialPort (may give DeviceID COMxx)
-                if (portsMap.size === 0) {
-                    try {
-                        const psCommand2 = 'powershell -NoProfile -Command "Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Description, Manufacturer | ConvertTo-Json"';
-                        const output2 = execSync(psCommand2, {
-                            encoding: 'utf8',
-                            timeout: 5000,
-                            stdio: 'pipe'
-                        });
-                        if (output2.trim()) {
-                            let psData = JSON.parse(output2);
-                            if (!Array.isArray(psData)) psData = [psData];
-                            psData.forEach(p => addPort(p.DeviceID, p.Manufacturer || 'WMI', p.Description || 'Serial Port'));
-                        }
-                    } catch (e2) {
-                        console.log('Win32_SerialPort detection failed:', e2.message);
-                    }
-                }
-
-                // Method 3: Registry enumeration
-                try {
-                    const regCommand = 'reg query HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM';
-                    const regOutput = execSync(regCommand, {
-                        encoding: 'utf8',
-                        timeout: 3000,
-                        stdio: 'pipe'
-                    });
-                    regOutput.split(/\r?\n/).forEach(line => {
-                        const match = line.match(/\s+(COM\d+)\s*$/i);
-                        if (match) addPort(match[1], 'Registry', 'Serial Port');
-                    });
-                } catch (regErr) {
-                    console.log('Registry detection failed:', regErr.message);
-                }
-
-                // Method 4: mode command (lists present devices)
-                try {
-                    const modeOutput = execSync('mode', { encoding: 'utf8', timeout: 3000, stdio: 'pipe' });
-                    modeOutput.split(/\r?\n/).forEach(line => {
-                        const m = line.match(/^(COM\d+):/i);
-                        if (m) addPort(m[1], 'mode', 'Serial Port');
-                    });
-                } catch (modeErr) {
-                    console.log('mode enumeration failed:', modeErr.message);
-                }
-
-                // Method 5: Targeted scan (always probe COM1..64 to catch any missed ports)
-                console.log('Active probing COM1..64 (incremental)...');
-                for (let i = 1; i <= 64; i++) {
-                    const name = `COM${i}`;
-                    if (portsMap.has(name)) continue; // skip already found
-                    try {
-                        execSync(`mode ${name}:`, { encoding: 'utf8', timeout: 400, stdio: 'pipe' });
-                        addPort(name, 'Probe', 'Available Serial Port');
-                    } catch (_) {
-                        // silent
-                    }
-                }
-
-                // Fallback defaults if still nothing
-                if (portsMap.size === 0) {
-                    // Nothing positively detected: offer a full selectable range for manual choice
-                    for (let i = 1; i <= 64; i++) {
-                        addPort(`COM${i}`, 'Common', 'Manual Select');
-                    }
-                }
-
-                // Convert to array & sort numerically
-                const detectedPorts = Array.from(portsMap.values()).sort((a, b) => parseInt(a.path.replace(/\D/g, '')) - parseInt(b.path.replace(/\D/g, '')));
-
-                console.log('Final port list:', detectedPorts);
-                portCache = { timestamp: Date.now(), ports: detectedPorts };
-                res.json({ ports: detectedPorts });
+                // Lazy load utility to reduce initial startup time
+                const { detectSerialPorts } = require('./utils/ports');
+                const ports = await detectSerialPorts();
+                portCache = { timestamp: Date.now(), ports };
+                res.json({ ports, cached: false });
             } catch (error) {
                 console.error('Port detection error:', error);
+                // Fallback range (1..64)
                 const fallbackPorts = Array.from({ length: 64 }, (_, i) => ({
                     path: `COM${i + 1}`,
                     manufacturer: 'Fallback',
                     description: 'Manual Select'
                 }));
-                res.json({ ports: fallbackPorts });
+                res.json({ ports: fallbackPorts, fallback: true });
             }
         });
 

@@ -1606,21 +1606,28 @@ void loop() {
 
                 console.log('Detected ports:', data.ports);
 
-                if (data.ports.length === 0) {
-                    updateStatus('❌ No serial ports found', 'error');
-                    return;
+                // Always build full COM1..64 list, mark detected ones
+                const detectedSet = new Set(data.ports.map(p => p.path.toUpperCase()));
+                const merged = [];
+                for (let i = 1; i <= 64; i++) {
+                    const name = 'COM' + i;
+                    if (detectedSet.has(name)) {
+                        const info = data.ports.find(p => p.path.toUpperCase() === name);
+                        merged.push({ ...info, detected: true });
+                    } else {
+                        merged.push({ path: name, manufacturer: '—', description: 'Manual Select', detected: false });
+                    }
                 }
 
-                if (data.ports.length === 1) {
-                    // Auto-select single port
-                    const port = data.ports[0];
-                    document.getElementById('portInput').value = port.path;
-                    updateStatus(`✅ Selected: ${port.path}`, 'success');
+                // Auto-select if exactly one detected
+                const detectedOnly = merged.filter(p => p.detected);
+                if (detectedOnly.length === 1) {
+                    document.getElementById('portInput').value = detectedOnly[0].path;
+                    updateStatus(`✅ Selected: ${detectedOnly[0].path}`, 'success');
                     document.getElementById('connectionStatus').textContent = 'Connected';
-                } else {
-                    // Show port selection modal
-                    showPortModal(data.ports);
                 }
+
+                showPortModal(merged);
 
             } catch (error) {
                 console.error('Port detection error:', error);
@@ -1643,9 +1650,10 @@ void loop() {
                 portItem.className = 'port-item';
                 portItem.onclick = () => selectPort(port.path);
 
+                const badge = port.detected ? '<span style="color:#27ae60;font-weight:600;margin-left:6px;">●</span>' : '<span style="color:#bdc3c7;margin-left:6px;">○</span>';
                 portItem.innerHTML = `
-                    <div class="port-path">📱 ${port.path}</div>
-                    <div class="port-desc">${port.manufacturer || 'Unknown'} - ${port.description || 'Serial Port'}</div>
+                    <div class="port-path">📱 ${port.path} ${badge}</div>
+                    <div class="port-desc">${port.detected ? (port.manufacturer || 'Detected') : 'Not detected'} - ${port.description || (port.detected ? 'Serial Port' : 'Manual Select')}</div>
                 `;
 
                 portList.appendChild(portItem);
