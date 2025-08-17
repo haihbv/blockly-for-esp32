@@ -15,6 +15,7 @@
     <script src="./blocks/gpio.js"></script>
     <script src="./blocks/delay.js"></script>
     <script src="./blocks/structure.js"></script>
+    <script src="./blocks/serial.js"></script>
     <script src="./generators/arduino.js"></script>
 
     <style>
@@ -788,12 +789,32 @@
             </div>
 
             <div class="category-list">
+                <!-- Program Category (Setup & Loop) -->
+                <div class="category-item">
+                    <div class="category-header category-structure" onclick="toggleCategory(this)">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="category-icon">🚀</div>
+                            <span>Program</span>
+                        </div>
+                        <span class="category-arrow">▼</span>
+                    </div>
+                    <div class="category-content active">
+                        <div class="block-item" data-block="esp32_setup">
+                            <div class="block-icon" style="background: #9b59b6;"></div>
+                            <div class="block-name">Setup (once)</div>
+                        </div>
+                        <div class="block-item" data-block="esp32_loop">
+                            <div class="block-icon" style="background: #9b59b6;"></div>
+                            <div class="block-name">Loop (repeat)</div>
+                        </div>
+                    </div>
+                </div>
                 <!-- GPIO Category -->
                 <div class="category-item">
                     <div class="category-header category-gpio" onclick="toggleCategory(this)">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <div class="category-icon">🔌</div>
-                            <span>ESP32 GPIO</span>
+                            <span>GPIO</span>
                         </div>
                         <span class="category-arrow">▼</span>
                     </div>
@@ -833,7 +854,7 @@
                     <div class="category-content">
                         <div class="block-item" data-block="controls_if">
                             <div class="block-icon" style="background: #3498db;"></div>
-                            <div class="block-name"> IF </div>
+                            <div class="block-name">IF</div>
                         </div>
                         <div class="block-item" data-block="logic_compare">
                             <div class="block-icon" style="background: #3498db;"></div>
@@ -867,7 +888,41 @@
                     </div>
                 </div>
 
-                <!-- Structure Category -->
+                <!-- Serial Category -->
+                <div class="category-item">
+                    <div class="category-header" style="background: linear-gradient(45deg,#ff512f,#dd2476);"
+                        onclick="toggleCategory(this)">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div class="category-icon">🖧</div>
+                            <span>Serial</span>
+                        </div>
+                        <span class="category-arrow">▼</span>
+                    </div>
+                    <div class="category-content">
+                        <div class="block-item" data-block="esp32_serial_begin">
+                            <div class="block-icon" style="background:#ff512f;"></div>
+                            <div class="block-name">Serial Begin</div>
+                        </div>
+                        <div class="block-item" data-block="esp32_serial_print">
+                            <div class="block-icon" style="background:#ff512f;"></div>
+                            <div class="block-name">Serial Print</div>
+                        </div>
+                        <div class="block-item" data-block="esp32_serial_println">
+                            <div class="block-icon" style="background:#ff512f;"></div>
+                            <div class="block-name">Serial Println</div>
+                        </div>
+                        <div class="block-item" data-block="esp32_serial_available">
+                            <div class="block-icon" style="background:#ff512f;"></div>
+                            <div class="block-name">Serial Available</div>
+                        </div>
+                        <div class="block-item" data-block="esp32_serial_read">
+                            <div class="block-icon" style="background:#ff512f;"></div>
+                            <div class="block-name">Serial Read</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control Category (loops etc.) -->
                 <div class="category-item">
                     <div class="category-header category-structure" onclick="toggleCategory(this)">
                         <div style="display: flex; align-items: center; gap: 10px;">
@@ -877,9 +932,6 @@
                         <span class="category-arrow">▼</span>
                     </div>
                     <div class="category-content">
-
-
-
                         <div class="block-item" data-block="esp32_while">
                             <div class="block-icon" style="background: #9b59b6;"></div>
                             <div class="block-name">While</div>
@@ -976,7 +1028,7 @@ void loop() {
     <!-- Status Bar -->
     <div class="status-bar">
         <div class="status-left">
-            <span>ESP32 Blockly IDE v2.0</span>
+            <span>ESP32 Blockly IDE v1.0</span>
             <span id="blockCount">Blocks: 0</span>
             <span id="connectionStatus">Disconnected</span>
         </div>

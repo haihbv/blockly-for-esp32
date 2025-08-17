@@ -117,6 +117,31 @@ Blockly.Arduino['esp32_delay_ms'] = function (block) {
   return 'delay(' + delay + ');\n';
 };
 
+// ===== Setup & Loop top-level blocks =====
+// Lưu code riêng biệt để finish() lắp vào
+Blockly.Arduino.userSetupCode_ = '';
+Blockly.Arduino.userLoopCode_ = '';
+
+Blockly.Arduino['esp32_setup'] = function (block) {
+  // Lấy các câu lệnh bên trong
+  let branch = Blockly.Arduino.statementToCode(block, 'DO');
+  if (branch) {
+    // bỏ indent đầu do statementToCode đã thêm
+    branch = branch.replace(/^  /gm, '');
+  }
+  Blockly.Arduino.userSetupCode_ += branch + '\n';
+  return '';// Không sinh trực tiếp
+};
+
+Blockly.Arduino['esp32_loop'] = function (block) {
+  let branch = Blockly.Arduino.statementToCode(block, 'DO');
+  if (branch) {
+    branch = branch.replace(/^  /gm, '');
+  }
+  Blockly.Arduino.userLoopCode_ += branch + '\n';
+  return '';
+};
+
 // WHILE loop with better formatting
 Blockly.Arduino['esp32_while'] = function (block) {
   const condition = Blockly.Arduino.valueToCode(block, 'CONDITION', Blockly.Arduino.ORDER_NONE) || 'false';
@@ -131,10 +156,6 @@ Blockly.Arduino['esp32_while'] = function (block) {
 
   return 'while (' + condition + ') {\n' + branch + '}\n';
 };
-
-// Mapping cho API mới
-if (!Blockly.Arduino.forBlock) Blockly.Arduino.forBlock = Object.create(null);
-Blockly.Arduino.forBlock['esp32_while'] = Blockly.Arduino['esp32_while'];
 
 // IF statement with better formatting
 Blockly.Arduino['controls_if'] = function (block) {
@@ -298,6 +319,43 @@ Blockly.Arduino['text_print'] = function (block) {
   return 'Serial.println(' + msg + ');\n';
 };
 
+// ===== Serial Blocks =====
+Blockly.Arduino['esp32_serial_begin'] = function (block) {
+  const baud = block.getFieldValue('BAUD') || '115200';
+  Blockly.Arduino.setups_['serial_init'] = 'Serial.begin(' + baud + ');';
+  return '// Serial.begin(' + baud + ')\n';
+};
+
+Blockly.Arduino['esp32_serial_print'] = function (block) {
+  const txt = Blockly.Arduino.valueToCode(block, 'TEXT', Blockly.Arduino.ORDER_NONE) || '""';
+  if (!Blockly.Arduino.setups_['serial_init']) {
+    Blockly.Arduino.setups_['serial_init'] = 'Serial.begin(115200);';
+  }
+  return 'Serial.print(' + txt + ');\n';
+};
+
+Blockly.Arduino['esp32_serial_println'] = function (block) {
+  const txt = Blockly.Arduino.valueToCode(block, 'TEXT', Blockly.Arduino.ORDER_NONE) || '""';
+  if (!Blockly.Arduino.setups_['serial_init']) {
+    Blockly.Arduino.setups_['serial_init'] = 'Serial.begin(115200);';
+  }
+  return 'Serial.println(' + txt + ');\n';
+};
+
+Blockly.Arduino['esp32_serial_available'] = function (block) {
+  if (!Blockly.Arduino.setups_['serial_init']) {
+    Blockly.Arduino.setups_['serial_init'] = 'Serial.begin(115200);';
+  }
+  return ['Serial.available()', Blockly.Arduino.ORDER_ATOMIC];
+};
+
+Blockly.Arduino['esp32_serial_read'] = function (block) {
+  if (!Blockly.Arduino.setups_['serial_init']) {
+    Blockly.Arduino.setups_['serial_init'] = 'Serial.begin(115200);';
+  }
+  return ['Serial.read()', Blockly.Arduino.ORDER_ATOMIC];
+};
+
 // Comments
 Blockly.Arduino['comment'] = function (block) {
   const comment = block.getFieldValue('COMMENT');
@@ -396,6 +454,8 @@ Blockly.Arduino.forBlock['esp32_button_read'] = Blockly.Arduino['esp32_button_re
 Blockly.Arduino.forBlock['esp32_high_low'] = Blockly.Arduino['esp32_high_low'];
 Blockly.Arduino.forBlock['esp32_delay_ms'] = Blockly.Arduino['esp32_delay_ms'];
 Blockly.Arduino.forBlock['esp32_while'] = Blockly.Arduino['esp32_while'];
+Blockly.Arduino.forBlock['esp32_setup'] = Blockly.Arduino['esp32_setup'];
+Blockly.Arduino.forBlock['esp32_loop'] = Blockly.Arduino['esp32_loop'];
 
 // IF blocks generators - ALL REMOVED
 
@@ -421,6 +481,13 @@ Blockly.Arduino.forBlock['comment'] = Blockly.Arduino['comment'];
 Blockly.Arduino.forBlock['procedures_defnoreturn'] = Blockly.Arduino['procedures_defnoreturn'];
 Blockly.Arduino.forBlock['procedures_callnoreturn'] = Blockly.Arduino['procedures_callnoreturn'];
 
+// Serial
+Blockly.Arduino.forBlock['esp32_serial_begin'] = Blockly.Arduino['esp32_serial_begin'];
+Blockly.Arduino.forBlock['esp32_serial_print'] = Blockly.Arduino['esp32_serial_print'];
+Blockly.Arduino.forBlock['esp32_serial_println'] = Blockly.Arduino['esp32_serial_println'];
+Blockly.Arduino.forBlock['esp32_serial_available'] = Blockly.Arduino['esp32_serial_available'];
+Blockly.Arduino.forBlock['esp32_serial_read'] = Blockly.Arduino['esp32_serial_read'];
+
 // Lists and additional controls
 Blockly.Arduino.forBlock['lists_create_empty'] = Blockly.Arduino['lists_create_empty'];
 Blockly.Arduino.forBlock['lists_create_with'] = Blockly.Arduino['lists_create_with'];
@@ -442,6 +509,8 @@ Blockly.Arduino.noGeneratorCodeLine = function (block) {
 Blockly.Arduino.init = function () {
   Blockly.Arduino.definitions_ = Object.create(null);
   Blockly.Arduino.setups_ = Object.create(null);
+  Blockly.Arduino.userSetupCode_ = '';
+  Blockly.Arduino.userLoopCode_ = '';
 
   if (!Blockly.Arduino.nameDB_) {
     Blockly.Arduino.nameDB_ = new Blockly.Names(Blockly.Arduino.RESERVED_WORDS_);
@@ -462,19 +531,27 @@ Blockly.Arduino.finish = function (code) {
   } else {
     setups += '  // Initialize your hardware here\n';
   }
+  // Thêm user setup code (từ block esp32_setup)
+  if (Blockly.Arduino.userSetupCode_.trim()) {
+    const lines = Blockly.Arduino.userSetupCode_.trim().split('\n');
+    for (const l of lines) {
+      if (l.trim()) setups += '  ' + l + '\n'; else setups += '\n';
+    }
+  }
   setups += '}\n\n';
 
   // Loop function
   let loop = 'void loop() {\n';
-  if (code.trim()) {
-    // Process code to ensure proper indentation
-    const lines = code.split('\n');
+  // Code sinh từ block esp32_loop (ưu tiên)
+  let loopSource = Blockly.Arduino.userLoopCode_.trim();
+  if (!loopSource) {
+    // fallback: nếu chưa dùng block esp32_loop thì dùng code còn lại
+    loopSource = code.trim();
+  }
+  if (loopSource) {
+    const lines = loopSource.split('\n');
     for (const line of lines) {
-      if (line.trim()) {
-        loop += '  ' + line + '\n';
-      } else {
-        loop += '\n';
-      }
+      if (line.trim()) loop += '  ' + line + '\n'; else loop += '\n';
     }
   } else {
     loop += '  // Your main code goes here\n';
