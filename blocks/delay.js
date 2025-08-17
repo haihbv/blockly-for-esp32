@@ -21,6 +21,17 @@ if (typeof Blockly !== 'undefined' && Blockly.Blocks) {
     }
   };
 
+  // Value block returning current time in milliseconds (Arduino millis())
+  Blockly.Blocks['esp32_millis'] = {
+    init: function () {
+      this.appendDummyInput().appendField('millis()');
+      this.setOutput(true, 'Number');
+      this.setColour(230);
+      this.setTooltip('Returns milliseconds since the program started');
+      this.setHelpUrl('https://www.arduino.cc/reference/en/language/functions/time/millis/');
+    }
+  };
+
 } else {
   console.error('Blockly not available for delay blocks');
 }

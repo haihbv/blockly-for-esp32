@@ -117,6 +117,11 @@ Blockly.Arduino['esp32_delay_ms'] = function (block) {
   return 'delay(' + delay + ');\n';
 };
 
+// millis() value block
+Blockly.Arduino['esp32_millis'] = function (block) {
+  return ['millis()', Blockly.Arduino.ORDER_ATOMIC];
+};
+
 // Relay generators
 Blockly.Arduino['esp32_relay_set'] = function (block) {
   const pin = block.getFieldValue('PIN');
@@ -496,6 +501,7 @@ Blockly.Arduino.forBlock['esp32_analog_read'] = Blockly.Arduino['esp32_analog_re
 Blockly.Arduino.forBlock['esp32_button_read'] = Blockly.Arduino['esp32_button_read'];
 Blockly.Arduino.forBlock['esp32_high_low'] = Blockly.Arduino['esp32_high_low'];
 Blockly.Arduino.forBlock['esp32_delay_ms'] = Blockly.Arduino['esp32_delay_ms'];
+Blockly.Arduino.forBlock['esp32_millis'] = Blockly.Arduino['esp32_millis'];
 Blockly.Arduino.forBlock['esp32_relay_set'] = Blockly.Arduino['esp32_relay_set'];
 Blockly.Arduino.forBlock['esp32_relay_blink'] = Blockly.Arduino['esp32_relay_blink'];
 Blockly.Arduino.forBlock['esp32_while'] = Blockly.Arduino['esp32_while'];
