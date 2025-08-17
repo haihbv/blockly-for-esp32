@@ -17,6 +17,7 @@
     <script src="./blocks/structure.js"></script>
     <script src="./blocks/serial.js"></script>
     <script src="./blocks/text_raw.js"></script>
+    <script src="./blocks/relay.js"></script>
     <script src="./generators/arduino.js"></script>
 
     <style>
@@ -897,6 +898,28 @@
                         <div class="block-item" data-block="esp32_high_low">
                             <div class="block-icon" style="background: #e74c3c;"></div>
                             <div class="block-name">HIGH/LOW</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Relay Category -->
+                <div class="category-item">
+                    <div class="category-header" style="background:linear-gradient(45deg,#ff512f,#dd2476)"
+                        onclick="toggleCategory(this)">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div class="category-icon">⚡</div>
+                            <span>Relay</span>
+                        </div>
+                        <span class="category-arrow">▼</span>
+                    </div>
+                    <div class="category-content">
+                        <div class="block-item" data-block="esp32_relay_set">
+                            <div class="block-icon" style="background:#ff8a5c"></div>
+                            <div class="block-name">Relay Set</div>
+                        </div>
+                        <div class="block-item" data-block="esp32_relay_blink">
+                            <div class="block-icon" style="background:#ff8a5c"></div>
+                            <div class="block-name">Relay Blink</div>
                         </div>
                     </div>
                 </div>

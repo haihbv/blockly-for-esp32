@@ -117,6 +117,36 @@ Blockly.Arduino['esp32_delay_ms'] = function (block) {
   return 'delay(' + delay + ');\n';
 };
 
+// Relay generators
+Blockly.Arduino['esp32_relay_set'] = function (block) {
+  const pin = block.getFieldValue('PIN');
+  const state = block.getFieldValue('STATE');
+  Blockly.Arduino.setups_['pin_' + pin] = 'pinMode(' + pin + ', OUTPUT);';
+  return 'digitalWrite(' + pin + ', ' + state + ');\n';
+};
+Blockly.Arduino['esp32_relay_blink'] = function (block) {
+  const pin = block.getFieldValue('PIN');
+  const onMs = block.getFieldValue('DELAY_ON');
+  const offMs = block.getFieldValue('DELAY_OFF');
+  Blockly.Arduino.setups_['pin_' + pin] = 'pinMode(' + pin + ', OUTPUT);';
+  // Nếu block trước đó đã set HIGH cùng pin thì bỏ dòng HIGH đầu để tránh trùng lặp
+  let skipFirstHigh = false;
+  const prev = block.getPreviousBlock();
+  if (prev && prev.type === 'esp32_relay_set') {
+    const prevPin = prev.getFieldValue('PIN');
+    const prevState = prev.getFieldValue('STATE');
+    if (prevPin === pin && prevState === 'HIGH') skipFirstHigh = true;
+  }
+  let code = '';
+  if (!skipFirstHigh) {
+    code += 'digitalWrite(' + pin + ', HIGH);\n';
+  }
+  code += 'delay(' + onMs + ');\n';
+  code += 'digitalWrite(' + pin + ', LOW);\n';
+  code += 'delay(' + offMs + ');\n';
+  return code;
+};
+
 // ===== Setup & Loop top-level blocks =====
 // Lưu code riêng biệt để finish() lắp vào
 Blockly.Arduino.userSetupCode_ = '';
@@ -453,6 +483,8 @@ Blockly.Arduino.forBlock['esp32_analog_read'] = Blockly.Arduino['esp32_analog_re
 Blockly.Arduino.forBlock['esp32_button_read'] = Blockly.Arduino['esp32_button_read'];
 Blockly.Arduino.forBlock['esp32_high_low'] = Blockly.Arduino['esp32_high_low'];
 Blockly.Arduino.forBlock['esp32_delay_ms'] = Blockly.Arduino['esp32_delay_ms'];
+Blockly.Arduino.forBlock['esp32_relay_set'] = Blockly.Arduino['esp32_relay_set'];
+Blockly.Arduino.forBlock['esp32_relay_blink'] = Blockly.Arduino['esp32_relay_blink'];
 Blockly.Arduino.forBlock['esp32_while'] = Blockly.Arduino['esp32_while'];
 Blockly.Arduino.forBlock['esp32_setup'] = Blockly.Arduino['esp32_setup'];
 Blockly.Arduino.forBlock['esp32_loop'] = Blockly.Arduino['esp32_loop'];
