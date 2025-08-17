@@ -132,7 +132,7 @@ Blockly.Arduino['esp32_relay_set'] = function (block) {
   }
   if (inSetup) {
     // Remember initial state, but don't emit digitalWrite (user wants clean setup)
-    Blockly.Arduino.relayInitialStates_[pin] = state; 
+    Blockly.Arduino.relayInitialStates_[pin] = state;
     return '';
   }
   return 'digitalWrite(' + pin + ', ' + state + ');\n';
