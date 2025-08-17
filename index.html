@@ -909,6 +909,10 @@
                             <div class="block-icon" style="background: #e74c3c;"></div>
                             <div class="block-name">HIGH/LOW</div>
                         </div>
+                        <div class="block-item" data-block="esp32_pin_mode">
+                            <div class="block-icon" style="background: #e74c3c;"></div>
+                            <div class="block-name">pinMode</div>
+                        </div>
                     </div>
                 </div>
 
@@ -1538,8 +1542,40 @@ void loop() {
                 }
 
                 if (!Blockly.Blocks[blockType]) {
-                    console.error('Block type not found:', blockType);
-                    return;
+                    console.warn('Block type not found initially:', blockType);
+                    // Fallback auto-register for pinMode (avoid cache issues)
+                    if (blockType === 'esp32_pin_mode') {
+                        console.log('[Fallback] Defining esp32_pin_mode block dynamically');
+                        Blockly.Blocks['esp32_pin_mode'] = {
+                            init: function () {
+                                this.appendDummyInput()
+                                    .appendField('pinMode')
+                                    .appendField(new Blockly.FieldTextInput('2'), 'PIN')
+                                    .appendField('as')
+                                    .appendField(new Blockly.FieldDropdown([
+                                        ['OUTPUT', 'OUTPUT'], ['INPUT', 'INPUT'], ['INPUT_PULLUP', 'INPUT_PULLUP'], ['INPUT_PULLDOWN', 'INPUT_PULLDOWN']
+                                    ]), 'MODE');
+                                this.setPreviousStatement(true, null);
+                                this.setNextStatement(true, null);
+                                this.setColour(160);
+                                this.setTooltip('Configure a GPIO pin direction/mode');
+                            }
+                        };
+                        // Also ensure generator exists
+                        if (!Blockly.Arduino.forBlock['esp32_pin_mode']) {
+                            Blockly.Arduino['esp32_pin_mode'] = function (block) {
+                                const pin = block.getFieldValue('PIN');
+                                const mode = block.getFieldValue('MODE');
+                                return 'pinMode(' + pin + ', ' + mode + ');\n';
+                            };
+                            Blockly.Arduino.forBlock['esp32_pin_mode'] = Blockly.Arduino['esp32_pin_mode'];
+                        }
+                    }
+                    // Re-check
+                    if (!Blockly.Blocks[blockType]) {
+                        updateStatus('Block not found: ' + blockType, 'error');
+                        return;
+                    }
                 }
 
                 const block = workspace.newBlock(blockType);

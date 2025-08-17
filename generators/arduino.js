@@ -112,6 +112,24 @@ Blockly.Arduino['esp32_high_low'] = function (block) {
   return [state, Blockly.Arduino.ORDER_ATOMIC];
 };
 
+// Explicit pinMode block (allows manual control order)
+Blockly.Arduino['esp32_pin_mode'] = function (block) {
+  const pin = block.getFieldValue('PIN');
+  const mode = block.getFieldValue('MODE');
+  // Place into setup only if appears inside esp32_setup. Otherwise emit inline pinMode.
+  let inSetup = false;
+  let parent = block.getParent && block.getParent();
+  while (parent) {
+    if (parent.type === 'esp32_setup') { inSetup = true; break; }
+    parent = parent.getParent && parent.getParent();
+  }
+  if (inSetup) {
+    Blockly.Arduino.setups_['pin_' + pin] = 'pinMode(' + pin + ', ' + mode + ');';
+    return '';
+  }
+  return 'pinMode(' + pin + ', ' + mode + ');\n';
+};
+
 Blockly.Arduino['esp32_delay_ms'] = function (block) {
   const delay = block.getFieldValue('DELAY');
   return 'delay(' + delay + ');\n';
@@ -500,6 +518,7 @@ Blockly.Arduino.forBlock['esp32_digital_read'] = Blockly.Arduino['esp32_digital_
 Blockly.Arduino.forBlock['esp32_analog_read'] = Blockly.Arduino['esp32_analog_read'];
 Blockly.Arduino.forBlock['esp32_button_read'] = Blockly.Arduino['esp32_button_read'];
 Blockly.Arduino.forBlock['esp32_high_low'] = Blockly.Arduino['esp32_high_low'];
+Blockly.Arduino.forBlock['esp32_pin_mode'] = Blockly.Arduino['esp32_pin_mode'];
 Blockly.Arduino.forBlock['esp32_delay_ms'] = Blockly.Arduino['esp32_delay_ms'];
 Blockly.Arduino.forBlock['esp32_millis'] = Blockly.Arduino['esp32_millis'];
 Blockly.Arduino.forBlock['esp32_relay_set'] = Blockly.Arduino['esp32_relay_set'];

@@ -1,5 +1,5 @@
 // ESP32 GPIO blocks
-console.log('Loading GPIO blocks...');
+console.log('Loading GPIO blocks v1.1 (with pinMode)...');
 
 if (typeof Blockly !== 'undefined' && Blockly.Blocks) {
   console.log('Creating GPIO blocks...');
@@ -85,6 +85,51 @@ if (typeof Blockly !== 'undefined' && Blockly.Blocks) {
     }
   };
 
+  // pinMode configuration block
+  Blockly.Blocks['esp32_pin_mode'] = {
+    init: function () {
+      this.appendDummyInput()
+        .appendField("pinMode")
+        .appendField(new Blockly.FieldTextInput("2", function (text) {
+          const n = parseInt(text);
+            return (!isNaN(n) && n >= 0 && n <= 40) ? text : null;
+        }), "PIN")
+        .appendField("as")
+        .appendField(new Blockly.FieldDropdown([
+          ["OUTPUT", "OUTPUT"],
+          ["INPUT", "INPUT"],
+          ["INPUT_PULLUP", "INPUT_PULLUP"],
+          ["INPUT_PULLDOWN", "INPUT_PULLDOWN"]
+        ]), "MODE");
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour(160);
+      this.setTooltip("Configure a GPIO pin direction/mode");
+      this.setHelpUrl("");
+    }
+  };
+
 } else {
-  console.error('Blockly not available for GPIO blocks');
+  console.error('Blockly not available for GPIO blocks at first load, will retry on window load');
+  // Fallback: wait until window load then try again (rare race or cache issue)
+  window.addEventListener('load', function retryRegisterGPIO(){
+    if (typeof Blockly !== 'undefined' && Blockly.Blocks && !Blockly.Blocks['esp32_pin_mode']) {
+      console.log('[GPIO fallback] Registering pinMode block after load');
+      Blockly.Blocks['esp32_pin_mode'] = {
+        init: function(){
+          this.appendDummyInput()
+            .appendField('pinMode')
+            .appendField(new Blockly.FieldTextInput('2'), 'PIN')
+            .appendField('as')
+            .appendField(new Blockly.FieldDropdown([
+              ['OUTPUT','OUTPUT'],['INPUT','INPUT'],['INPUT_PULLUP','INPUT_PULLUP'],['INPUT_PULLDOWN','INPUT_PULLDOWN']
+            ]), 'MODE');
+          this.setPreviousStatement(true,null);
+          this.setNextStatement(true,null);
+          this.setColour(160);
+          this.setTooltip('Configure a GPIO pin direction/mode');
+        }
+      };
+    }
+  });
 }
