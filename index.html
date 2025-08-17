@@ -774,6 +774,22 @@
             position: fixed !important;
             z-index: 8000 !important;
         }
+
+        /* Custom compile button style */
+        #btnCompile {
+            background: linear-gradient(90deg, #5f2cff, #7d4dff);
+            border: none;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        #btnCompile:hover {
+            filter: brightness(1.05);
+        }
+
+        #btnCompile:active {
+            filter: brightness(0.92);
+        }
     </style>
 </head>
 
@@ -792,7 +808,9 @@
                 <button class="btn btn-primary" id="btnDetect">🔍 Detect</button>
             </div>
 
-            <button class="btn btn-success" id="btnGenerate">⚡ Generate</button>
+            <button class="btn btn-success" id="btnGenerate"
+                style="background:linear-gradient(90deg,#0b8f2d,#067a24);border:none;">⚡ Generate</button>
+            <button class="btn btn-warning" id="btnCompile">⚙ Compile</button>
             <button class="btn btn-danger" id="btnUpload">📤 Upload</button>
         </div>
     </div>
@@ -1307,6 +1325,7 @@ void loop() {
             document.getElementById('btnDetect').addEventListener('click', detectPorts);
             document.getElementById('btnGenerate').addEventListener('click', generateArduinoCode);
             document.getElementById('btnUpload').addEventListener('click', uploadCode);
+            document.getElementById('btnCompile').addEventListener('click', compileCode);
 
             // Block items in sidebar
             document.querySelectorAll('.block-item').forEach(item => {
@@ -1693,6 +1712,40 @@ void loop() {
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = originalText;
+            }
+        }
+
+        // Compile only (no upload)
+        async function compileCode() {
+            const code = document.getElementById('codeArea').value;
+            if (!code.trim()) {
+                updateStatus('❌ No code to compile', 'error');
+                return;
+            }
+            const btn = document.getElementById('btnCompile');
+            const original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '⚙ Compiling...';
+            updateStatus('⏳ Compiling sketch...', 'info');
+            try {
+                const response = await fetch('/compile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    updateStatus('✅ Compile OK', 'success');
+                } else {
+                    updateStatus('⚠ Compile failed (see console / maybe missing arduino-cli): ' + (result.error || result.message), 'warning');
+                }
+                console.log('Compile result:', result);
+            } catch (e) {
+                console.error('Compile error:', e);
+                updateStatus('❌ Compile error: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = original;
             }
         }
 

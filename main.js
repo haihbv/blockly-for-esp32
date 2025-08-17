@@ -37,6 +37,8 @@ function startServer() {
     try {
         const expressApp = express();
         const { execSync } = require('child_process');
+        // Simple in-memory cache for port scanning results to avoid heavy repeated queries
+        let portCache = { timestamp: 0, ports: [] };
 
         // Middleware
         expressApp.use(express.json({ limit: '10mb' }));
@@ -107,115 +109,184 @@ function startServer() {
             }
         });
 
+        // Compile only endpoint (no upload) --------------------
+        expressApp.post('/compile', async (req, res) => {
+            try {
+                const { code } = req.body;
+                console.log(`Compile request: code length=${code ? code.length : 0}`);
+
+                if (!code || !code.trim()) {
+                    return res.status(400).json({ error: 'No code provided' });
+                }
+
+                const sketchDir = path.join(__dirname, 'temp_sketch');
+                if (!fs.existsSync(sketchDir)) {
+                    fs.mkdirSync(sketchDir, { recursive: true });
+                }
+                const sketchFile = path.join(sketchDir, 'temp_sketch.ino');
+                fs.writeFileSync(sketchFile, code, 'utf8');
+                console.log('Sketch file written for compile:', sketchFile);
+
+                const { execSync } = require('child_process');
+                const compileCmd = `arduino-cli compile --fqbn esp32:esp32:esp32 "${sketchFile}"`;
+                let compileOutput = '';
+                try {
+                    compileOutput = execSync(compileCmd, { encoding: 'utf8', stdio: 'pipe', timeout: 45000 });
+                    res.json({
+                        success: true,
+                        stage: 'Compile Complete',
+                        message: 'Compilation successful',
+                        output: compileOutput,
+                        file: sketchFile
+                    });
+                } catch (compileErr) {
+                    console.log('Compile failed or arduino-cli missing:', compileErr.message);
+                    res.status(200).json({
+                        success: false,
+                        stage: 'Compile Failed',
+                        message: 'Compilation failed or arduino-cli not installed. You can still upload manually using Arduino IDE.',
+                        error: compileErr.message,
+                        file: sketchFile
+                    });
+                }
+            } catch (error) {
+                console.error('Compile endpoint error:', error);
+                res.status(500).json({ error: `Compile failed: ${error.message}`, details: error.stack });
+            }
+        });
+
         expressApp.get('/ports', async (req, res) => {
             try {
-                console.log('Detecting serial ports...');
+                const now = Date.now();
+                // Reuse cache if younger than 3s
+                if (now - portCache.timestamp < 3000 && portCache.ports.length) {
+                    return res.json({ ports: portCache.ports });
+                }
 
-                const detectedPorts = [];
+                console.log('Detecting serial ports (fresh scan)...');
 
-                // Method 1: Try PowerShell
+                const portsMap = new Map(); // path -> info
+
+                const addPort = (path, manufacturer = 'Unknown', description = 'Serial Port') => {
+                    if (!path) return;
+                    // Normalize like COM47 etc.
+                    const normalized = path.toUpperCase().trim();
+                    if (!/^COM\d+$/.test(normalized)) return; // keep only COM style for now
+                    // Prefer richer description if already exists
+                    if (portsMap.has(normalized)) {
+                        const existing = portsMap.get(normalized);
+                        if (existing && existing.description === 'Serial Port' && description !== 'Serial Port') {
+                            portsMap.set(normalized, { path: normalized, manufacturer, description });
+                        }
+                    } else {
+                        portsMap.set(normalized, { path: normalized, manufacturer, description });
+                    }
+                };
+
+                // Method 1: WMI (more comprehensive, includes high COM numbers)
                 try {
-                    const psCommand = 'powershell -Command "Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Description, Manufacturer | ConvertTo-Json"';
+                    const psCommand = 'powershell -NoProfile -Command "Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match \'[(]COM[0-9]+[)]\' } | Select-Object Name, Manufacturer | ConvertTo-Json -Depth 2"';
                     const output = execSync(psCommand, {
                         encoding: 'utf8',
-                        timeout: 5000,
+                        timeout: 6000,
                         stdio: 'pipe'
                     });
-
                     if (output.trim()) {
-                        let psData = JSON.parse(output);
-                        if (!Array.isArray(psData)) {
-                            psData = [psData];
-                        }
-
-                        psData.forEach(port => {
-                            if (port.DeviceID) {
-                                detectedPorts.push({
-                                    path: port.DeviceID,
-                                    manufacturer: port.Manufacturer || 'Unknown',
-                                    description: port.Description || 'Serial Port'
-                                });
+                        let data = JSON.parse(output);
+                        if (!Array.isArray(data)) data = [data];
+                        data.forEach(d => {
+                            if (d && d.Name) {
+                                const match = d.Name.match(/\(COM(\d+)\)/i);
+                                if (match) {
+                                    addPort(`COM${match[1]}`, d.Manufacturer || 'WMI', d.Name.replace(/\s*\(COM\d+\)\s*/i, '').trim() || 'Serial Device');
+                                }
                             }
                         });
                     }
-                } catch (psError) {
-                    console.log('PowerShell detection failed:', psError.message);
+                } catch (e) {
+                    console.log('WMI PnPEntity detection failed:', e.message);
                 }
 
-                // Method 2: Try Registry query for all COM ports
-                if (detectedPorts.length === 0) {
+                // Method 2: Legacy Win32_SerialPort (may give DeviceID COMxx)
+                if (portsMap.size === 0) {
                     try {
-                        const regCommand = 'reg query HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM';
-                        const regOutput = execSync(regCommand, {
+                        const psCommand2 = 'powershell -NoProfile -Command "Get-CimInstance -ClassName Win32_SerialPort | Select-Object DeviceID, Description, Manufacturer | ConvertTo-Json"';
+                        const output2 = execSync(psCommand2, {
                             encoding: 'utf8',
-                            timeout: 3000,
+                            timeout: 5000,
                             stdio: 'pipe'
                         });
-
-                        const lines = regOutput.split('\n');
-                        lines.forEach(line => {
-                            const match = line.match(/\s+(COM\d+)\s*$/);
-                            if (match) {
-                                detectedPorts.push({
-                                    path: match[1],
-                                    manufacturer: 'Registry',
-                                    description: 'Serial Port'
-                                });
-                            }
-                        });
-                    } catch (regError) {
-                        console.log('Registry detection failed:', regError.message);
-                    }
-                }
-
-                // Method 3: Test common ports
-                if (detectedPorts.length === 0) {
-                    console.log('Testing common COM ports...');
-
-                    for (let i = 1; i <= 10; i++) {
-                        try {
-                            // Try to access port with mode command
-                            execSync(`mode COM${i}: baud=9600 parity=n data=8 stop=1`, {
-                                stdio: 'pipe',
-                                timeout: 1000
-                            });
-
-                            detectedPorts.push({
-                                path: `COM${i}`,
-                                manufacturer: 'Detected',
-                                description: 'Available Serial Port'
-                            });
-                        } catch (err) {
-                            // Port not available, continue
+                        if (output2.trim()) {
+                            let psData = JSON.parse(output2);
+                            if (!Array.isArray(psData)) psData = [psData];
+                            psData.forEach(p => addPort(p.DeviceID, p.Manufacturer || 'WMI', p.Description || 'Serial Port'));
                         }
+                    } catch (e2) {
+                        console.log('Win32_SerialPort detection failed:', e2.message);
                     }
                 }
 
-                // Fallback: Return common ports
-                if (detectedPorts.length === 0) {
-                    console.log('No ports detected, returning common options');
-                    [3, 4, 5, 6, 7, 8].forEach(i => {
-                        detectedPorts.push({
-                            path: `COM${i}`,
-                            manufacturer: 'Common',
-                            description: 'Standard Serial Port'
-                        });
+                // Method 3: Registry enumeration
+                try {
+                    const regCommand = 'reg query HKLM\\HARDWARE\\DEVICEMAP\\SERIALCOMM';
+                    const regOutput = execSync(regCommand, {
+                        encoding: 'utf8',
+                        timeout: 3000,
+                        stdio: 'pipe'
                     });
+                    regOutput.split(/\r?\n/).forEach(line => {
+                        const match = line.match(/\s+(COM\d+)\s*$/i);
+                        if (match) addPort(match[1], 'Registry', 'Serial Port');
+                    });
+                } catch (regErr) {
+                    console.log('Registry detection failed:', regErr.message);
                 }
+
+                // Method 4: mode command (lists present devices)
+                try {
+                    const modeOutput = execSync('mode', { encoding: 'utf8', timeout: 3000, stdio: 'pipe' });
+                    modeOutput.split(/\r?\n/).forEach(line => {
+                        const m = line.match(/^(COM\d+):/i);
+                        if (m) addPort(m[1], 'mode', 'Serial Port');
+                    });
+                } catch (modeErr) {
+                    console.log('mode enumeration failed:', modeErr.message);
+                }
+
+                // Method 5: Targeted scan (always probe COM1..64 to catch any missed ports)
+                console.log('Active probing COM1..64 (incremental)...');
+                for (let i = 1; i <= 64; i++) {
+                    const name = `COM${i}`;
+                    if (portsMap.has(name)) continue; // skip already found
+                    try {
+                        execSync(`mode ${name}:`, { encoding: 'utf8', timeout: 400, stdio: 'pipe' });
+                        addPort(name, 'Probe', 'Available Serial Port');
+                    } catch (_) {
+                        // silent
+                    }
+                }
+
+                // Fallback defaults if still nothing
+                if (portsMap.size === 0) {
+                    // Nothing positively detected: offer a full selectable range for manual choice
+                    for (let i = 1; i <= 64; i++) {
+                        addPort(`COM${i}`, 'Common', 'Manual Select');
+                    }
+                }
+
+                // Convert to array & sort numerically
+                const detectedPorts = Array.from(portsMap.values()).sort((a, b) => parseInt(a.path.replace(/\D/g, '')) - parseInt(b.path.replace(/\D/g, '')));
 
                 console.log('Final port list:', detectedPorts);
+                portCache = { timestamp: Date.now(), ports: detectedPorts };
                 res.json({ ports: detectedPorts });
-
             } catch (error) {
                 console.error('Port detection error:', error);
-
-                // Emergency fallback
-                const fallbackPorts = [
-                    { path: 'COM3', manufacturer: 'Fallback', description: 'Default Port' },
-                    { path: 'COM4', manufacturer: 'Fallback', description: 'Default Port' },
-                    { path: 'COM5', manufacturer: 'Fallback', description: 'Default Port' }
-                ];
-
+                const fallbackPorts = Array.from({ length: 64 }, (_, i) => ({
+                    path: `COM${i + 1}`,
+                    manufacturer: 'Fallback',
+                    description: 'Manual Select'
+                }));
                 res.json({ ports: fallbackPorts });
             }
         });
